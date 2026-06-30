@@ -5,7 +5,10 @@ export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url')
 
   if (!url) {
-    return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Missing url parameter' },
+      { status: 400 },
+    )
   }
 
   try {
@@ -13,8 +16,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ slugs })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch sitemap' },
-      { status: 500 }
+      {
+        error:
+          error instanceof Error ? error.message : 'Failed to fetch sitemap',
+      },
+      { status: 500 },
     )
   }
 }

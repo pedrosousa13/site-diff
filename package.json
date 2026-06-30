@@ -6,13 +6,18 @@
     "dev": "next dev -p 3333",
     "build": "next build",
     "start": "next start -p 3333",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "fast-xml-parser": "^5.3.4",
+    "lucide-react": "^1.22.0",
     "nanoid": "^5.1.6",
     "next": "^16.1.6",
     "pixelmatch": "^7.1.0",
@@ -28,7 +33,9 @@
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "postcss": "^8.5.6",
+    "prettier": "3.8.4",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.6"
   }
 }

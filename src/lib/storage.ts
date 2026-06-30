@@ -17,7 +17,9 @@ export async function saveMetadata(run: ComparisonRun): Promise<void> {
   await fs.writeFile(metaPath, JSON.stringify(run, null, 2))
 }
 
-export async function getMetadata(runId: string): Promise<ComparisonRun | null> {
+export async function getMetadata(
+  runId: string,
+): Promise<ComparisonRun | null> {
   try {
     const metaPath = path.join(DATA_DIR, runId, 'meta.json')
     const content = await fs.readFile(metaPath, 'utf-8')
@@ -35,8 +37,9 @@ export async function listRuns(): Promise<ComparisonRun[]> {
       const meta = await getMetadata(dir)
       if (meta) runs.push(meta)
     }
-    return runs.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    return runs.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     )
   } catch {
     return []
@@ -48,7 +51,11 @@ export async function deleteRun(runId: string): Promise<void> {
   await fs.rm(runDir, { recursive: true, force: true })
 }
 
-export function getScreenshotPath(runId: string, side: 'a' | 'b', slug: string): string {
+export function getScreenshotPath(
+  runId: string,
+  side: 'a' | 'b',
+  slug: string,
+): string {
   const filename = slugToFilename(slug)
   return path.join(DATA_DIR, runId, 'screenshots', side, filename)
 }
@@ -59,6 +66,7 @@ export function getDiffPath(runId: string, slug: string): string {
 }
 
 function slugToFilename(slug: string): string {
-  const name = slug === '/' ? 'home' : slug.replace(/^\//, '').replace(/\//g, '-')
+  const name =
+    slug === '/' ? 'home' : slug.replace(/^\//, '').replace(/\//g, '-')
   return `${name}.png`
 }

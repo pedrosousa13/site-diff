@@ -1,0 +1,53 @@
+import { describe, it, expect, afterAll } from 'vitest'
+import { promises as fs } from 'fs'
+import os from 'os'
+import path from 'path'
+import { PNG } from 'pngjs'
+import { diffImages } from './differ'
+
+const tmp = path.join(os.tmpdir(), 'site-diff-differ-test')
+
+async function writeSolid(file: string, r: number, g: number, b: number) {
+  const png = new PNG({ width: 3, height: 3 })
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = r
+    png.data[i + 1] = g
+    png.data[i + 2] = b
+    png.data[i + 3] = 255
+  }
+  await fs.writeFile(file, PNG.sync.write(png))
+}
+
+async function centerPixel(file: string): Promise<[number, number, number]> {
+  const png = PNG.sync.read(await fs.readFile(file))
+  const idx = (png.width * 1 + 1) * 4 // pixel (1,1)
+  return [png.data[idx], png.data[idx + 1], png.data[idx + 2]]
+}
+
+afterAll(async () => {
+  await fs.rm(tmp, { recursive: true, force: true })
+})
+
+describe('diffImages two-color overlay', () => {
+  it('paints added/darker-in-B pixels green', async () => {
+    await fs.mkdir(tmp, { recursive: true })
+    const a = path.join(tmp, 'a1.png')
+    const b = path.join(tmp, 'b1.png')
+    const out = path.join(tmp, 'd1.png')
+    await writeSolid(a, 255, 255, 255) // A white
+    await writeSolid(b, 0, 0, 0) // B black -> B darker -> added
+    await diffImages(a, b, out, 0.1)
+    expect(await centerPixel(out)).toEqual([0, 180, 80])
+  })
+
+  it('paints removed/lighter-in-B pixels red', async () => {
+    await fs.mkdir(tmp, { recursive: true })
+    const a = path.join(tmp, 'a2.png')
+    const b = path.join(tmp, 'b2.png')
+    const out = path.join(tmp, 'd2.png')
+    await writeSolid(a, 0, 0, 0) // A black
+    await writeSolid(b, 255, 255, 255) // B white -> B lighter -> removed
+    await diffImages(a, b, out, 0.1)
+    expect(await centerPixel(out)).toEqual([255, 0, 0])
+  })
+})

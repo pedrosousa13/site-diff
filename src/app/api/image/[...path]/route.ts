@@ -4,7 +4,7 @@ import path from 'path'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
   const { path: pathSegments } = await params
   const imagePath = path.join(process.cwd(), 'data', 'runs', ...pathSegments)

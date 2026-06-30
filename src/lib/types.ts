@@ -4,6 +4,7 @@ export interface ComparisonConfig {
   delay: number
   threshold: number
   hideSelectors?: string[]
+  clickSelectors?: string[]
 }
 
 export interface PageResult {
@@ -13,6 +14,8 @@ export interface PageResult {
   status: 'match' | 'diff' | 'error'
   sizeDiff: boolean
   error?: string
+  version: number
+  checked?: boolean
 }
 
 export interface ComparisonRun {
@@ -21,8 +24,11 @@ export interface ComparisonRun {
   baseUrlB: string
   createdAt: string
   config: ComparisonConfig
+  slugs: string[]
   results: PageResult[]
   status: 'running' | 'completed' | 'failed'
+  /** How many slugs to process in parallel. See runner.ts. Clamped to [1, MAX_CONCURRENCY]. */
+  concurrency?: number
 }
 
 export const DEFAULT_CONFIG: ComparisonConfig = {
@@ -30,4 +36,18 @@ export const DEFAULT_CONFIG: ComparisonConfig = {
   fullPage: true,
   delay: 500,
   threshold: 0.1,
+}
+
+/** Upper bound for parallel slug processing. Each slug renders 2 pages, so the
+ * real peak of concurrent Chromium contexts is 2x this. Keep modest on laptops. */
+export const MAX_CONCURRENCY = 5
+export const DEFAULT_CONCURRENCY = 3
+
+/** Clamp a requested concurrency to [1, MAX_CONCURRENCY], falling back to the
+ * default for missing/invalid values (0, NaN, undefined). */
+export function clampConcurrency(value: number | undefined): number {
+  return Math.min(
+    Math.max(1, Number(value) || DEFAULT_CONCURRENCY),
+    MAX_CONCURRENCY,
+  )
 }

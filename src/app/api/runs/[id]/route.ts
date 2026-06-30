@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMetadata, deleteRun } from '@/lib/storage'
+import { getMetadata, deleteRun, saveMetadata } from '@/lib/storage'
+import { withRunLock } from '@/lib/runner'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
   const run = await getMetadata(id)
@@ -17,7 +18,7 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
 
@@ -27,4 +28,32 @@ export async function DELETE(
   } catch {
     return NextResponse.json({ error: 'Failed to delete run' }, { status: 500 })
   }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  const { slug, checked } = await request.json()
+
+  // Read-modify-write under the run lock with a fresh read, so toggling `checked`
+  // doesn't clobber a result an in-flight appendResult is writing.
+  const outcome = await withRunLock(id, async () => {
+    const run = await getMetadata(id)
+    if (!run) return 'run-not-found' as const
+    const result = run.results.find((r) => r.slug === slug)
+    if (!result) return 'slug-not-found' as const
+    result.checked = Boolean(checked)
+    await saveMetadata(run)
+    return 'ok' as const
+  })
+
+  if (outcome === 'run-not-found') {
+    return NextResponse.json({ error: 'Run not found' }, { status: 404 })
+  }
+  if (outcome === 'slug-not-found') {
+    return NextResponse.json({ error: 'Slug not found' }, { status: 404 })
+  }
+  return NextResponse.json({ ok: true })
 }

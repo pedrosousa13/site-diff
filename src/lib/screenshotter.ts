@@ -22,30 +22,45 @@ export async function closeBrowser(): Promise<void> {
 export async function takeScreenshot(
   url: string,
   outputPath: string,
-  config: ComparisonConfig
+  config: ComparisonConfig,
 ): Promise<void> {
   const b = await getBrowser()
   const context = await b.newContext({
     viewport: config.viewport,
     ignoreHTTPSErrors: true,
   })
+
   const page = await context.newPage()
 
   try {
     // Try original URL first, fall back to http if https fails
     let targetUrl = url
     try {
-      await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30000 })
+      await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 })
     } catch (err) {
-      const isSSLError = err instanceof Error &&
-        (err.message.includes('ERR_SSL') || err.message.includes('SSL_PROTOCOL'))
+      const isSSLError =
+        err instanceof Error &&
+        (err.message.includes('ERR_SSL') ||
+          err.message.includes('SSL_PROTOCOL'))
 
       if (isSSLError && targetUrl.startsWith('https://')) {
         // Retry with http://
         targetUrl = targetUrl.replace('https://', 'http://')
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30000 })
+        await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 })
       } else {
         throw err
+      }
+    }
+
+    // Dismiss consent banners / modals by clicking (e.g. OneTrust accept button).
+    // Best-effort: the banner may not appear on every page or environment.
+    if (config.clickSelectors?.length) {
+      for (const selector of config.clickSelectors) {
+        try {
+          await page.click(selector, { timeout: 5000 })
+        } catch {
+          // Selector not present — nothing to dismiss, continue.
+        }
       }
     }
 
@@ -74,32 +89,4 @@ async function hideElements(page: Page, selectors: string[]): Promise<void> {
       })
     }, selector)
   }
-}
-
-export async function screenshotPages(
-  baseUrl: string,
-  slugs: string[],
-  outputDir: string,
-  config: ComparisonConfig,
-  onProgress?: (slug: string, index: number) => void
-): Promise<Map<string, string | Error>> {
-  const results = new Map<string, string | Error>()
-
-  for (let i = 0; i < slugs.length; i++) {
-    const slug = slugs[i]
-    const url = new URL(slug, baseUrl).toString()
-    const filename = slug === '/' ? 'home.png' : `${slug.replace(/^\//, '').replace(/\//g, '-')}.png`
-    const outputPath = `${outputDir}/${filename}`
-
-    onProgress?.(slug, i)
-
-    try {
-      await takeScreenshot(url, outputPath, config)
-      results.set(slug, outputPath)
-    } catch (error) {
-      results.set(slug, error instanceof Error ? error : new Error(String(error)))
-    }
-  }
-
-  return results
 }
