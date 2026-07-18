@@ -35,6 +35,20 @@ export default async function RunPage({
     notFound()
   }
 
+  // Repeated `slugs`/`slugsB` params round-trip slugs safely even when a slug
+  // contains a comma (a single comma-joined value would split incorrectly).
+  const rerunParams = new URLSearchParams()
+  rerunParams.set('baseUrlA', run.baseUrlA)
+  rerunParams.set('baseUrlB', run.baseUrlB)
+  if (run.slugPairs) {
+    for (const p of run.slugPairs) {
+      rerunParams.append('slugs', p.a)
+      rerunParams.append('slugsB', p.b)
+    }
+  } else {
+    for (const r of run.results) rerunParams.append('slugs', r.slug)
+  }
+
   return (
     <main className="container mx-auto p-8">
       <div className="mb-6">
@@ -54,11 +68,7 @@ export default async function RunPage({
           </div>
         </div>
         <Link
-          href={
-            run.slugPairs
-              ? `/?baseUrlA=${encodeURIComponent(run.baseUrlA)}&baseUrlB=${encodeURIComponent(run.baseUrlB)}&slugs=${encodeURIComponent(run.slugPairs.map((p) => p.a).join(','))}&slugsB=${encodeURIComponent(run.slugPairs.map((p) => p.b).join(','))}`
-              : `/?baseUrlA=${encodeURIComponent(run.baseUrlA)}&baseUrlB=${encodeURIComponent(run.baseUrlB)}&slugs=${encodeURIComponent(run.results.map((r) => r.slug).join(','))}`
-          }
+          href={`/?${rerunParams.toString()}`}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
         >
           Run Again

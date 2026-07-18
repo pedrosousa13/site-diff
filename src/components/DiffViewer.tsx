@@ -14,8 +14,8 @@ import type { PageResult } from '@/lib/types'
 interface Props {
   runId: string
   slug: string
-  /** Environment-B slug when it differs from `slug` (pair mode). */
-  slugB?: string
+  /** Environment-B slug; equals `slug` outside pair mode. */
+  slugB: string
   result: PageResult
   baseUrlA: string
   baseUrlB: string
@@ -45,7 +45,7 @@ export default function DiffViewer({
 }: Props) {
   // Full page URLs for the current slug, matching how the screenshots were taken (runner.ts).
   const pageUrlA = new URL(slug, baseUrlA).toString()
-  const pageUrlB = new URL(slugB ?? slug, baseUrlB).toString()
+  const pageUrlB = new URL(slugB, baseUrlB).toString()
   const [mode, setMode] = useState<ViewMode>('side-by-side')
   const [sliderPos, setSliderPos] = useState(50)
   const [expanded, setExpanded] = useState(false)
@@ -139,7 +139,7 @@ export default function DiffViewer({
           <div>
             <h2 className="font-mono text-lg truncate">
               {slug}
-              {slugB && slugB !== slug && (
+              {slugB !== slug && (
                 <>
                   <span className="text-gray-400"> vs </span>
                   {slugB}

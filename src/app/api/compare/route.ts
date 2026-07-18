@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   // Pairs are re-validated here; `slugs` becomes the A-side identity list.
   let slugs: string[] = body.slugs ?? []
   let slugPairs: SlugPair[] | undefined
-  if (body.slugPairs !== undefined) {
+  if (body.slugPairs != null) {
     const validated = validateSlugPairs(body.slugPairs)
     if (!validated.ok) {
       return NextResponse.json({ error: validated.error }, { status: 400 })

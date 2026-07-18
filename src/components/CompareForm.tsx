@@ -60,17 +60,18 @@ export default function CompareForm() {
   useEffect(() => {
     const urlA = searchParams.get('baseUrlA')
     const urlB = searchParams.get('baseUrlB')
-    const urlSlugs = searchParams.get('slugs')
-    const urlSlugsB = searchParams.get('slugsB')
+    // Repeated params, so a slug containing a comma survives the round-trip.
+    const urlSlugs = searchParams.getAll('slugs')
+    const urlSlugsB = searchParams.getAll('slugsB')
 
-    if (urlA || urlB || urlSlugs) {
+    if (urlA || urlB || urlSlugs.length || urlSlugsB.length) {
       // URL params take priority (from "Run Again")
       if (urlA) setBaseUrlA(urlA)
       if (urlB) setBaseUrlB(urlB)
-      if (urlSlugs) setSlugsText(urlSlugs.split(',').join('\n'))
-      if (urlSlugsB) {
+      if (urlSlugs.length) setSlugsText(urlSlugs.join('\n'))
+      if (urlSlugsB.length) {
         setPairMode(true)
-        setSlugsTextB(urlSlugsB.split(',').join('\n'))
+        setSlugsTextB(urlSlugsB.join('\n'))
       }
     } else {
       // Fall back to localStorage
@@ -195,15 +196,9 @@ export default function CompareForm() {
     }
   }
 
-  // Live pairing hint for pair mode; matches zipSlugPairs (trailing blank
-  // lines don't count).
-  const countLines = (text: string) => {
-    const lines = text.split('\n').map((line) => line.trim())
-    while (lines.length && !lines[lines.length - 1]) lines.pop()
-    return lines.length
-  }
-  const lineCountA = countLines(slugsText)
-  const lineCountB = countLines(slugsTextB)
+  // Live pairing hint driven by the same validator used on submit, so the
+  // preview never disagrees with what actually happens when you run.
+  const pairPreview = pairMode ? zipSlugPairs(slugsText, slugsTextB) : null
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -277,15 +272,13 @@ export default function CompareForm() {
           </div>
           <p className="mt-1 text-xs text-gray-500">
             Line 1 of A is compared against line 1 of B, and so on.{' '}
-            {lineCountA === lineCountB ? (
+            {pairPreview?.ok ? (
               <span>
-                {lineCountA} {lineCountA === 1 ? 'pair' : 'pairs'}
+                {pairPreview.pairs.length}{' '}
+                {pairPreview.pairs.length === 1 ? 'pair' : 'pairs'}
               </span>
             ) : (
-              <span className="text-amber-600">
-                A: {lineCountA} lines · B: {lineCountB} lines — counts must
-                match
-              </span>
+              <span className="text-amber-600">{pairPreview?.error}</span>
             )}
           </p>
         </div>
@@ -308,6 +301,14 @@ export default function CompareForm() {
         <p className="text-xs text-gray-400">
           Sitemap import is available only when both environments share the same
           slugs.
+        </p>
+      )}
+
+      {pairMode && selectedSlugs.size > 0 && (
+        <p className="text-xs text-amber-600">
+          {selectedSlugs.size} sitemap-selected{' '}
+          {selectedSlugs.size === 1 ? 'slug is' : 'slugs are'} ignored in
+          per-environment mode — only the paired lines above are compared.
         </p>
       )}
 

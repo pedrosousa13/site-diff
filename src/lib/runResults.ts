@@ -1,8 +1,10 @@
 import type { ComparisonRun } from './types'
 
-/** Every slug the run covers. Falls back to result slugs for older runs that
- * predate the `slugs` field. */
+/** Every slug the run covers, keyed on the environment-A slug. Prefers
+ * `slugPairs` (the source of truth in pair mode), then `slugs`, and finally
+ * result slugs for older runs that predate both fields. */
 export function getAllSlugs(run: ComparisonRun): string[] {
+  if (run.slugPairs) return run.slugPairs.map((p) => p.a)
   return run.slugs ?? run.results.map((r) => r.slug)
 }
 
