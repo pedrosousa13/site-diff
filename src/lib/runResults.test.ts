@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { getErrorSlugs, getPendingSlugs, parseShortId } from './runResults'
+import {
+  getErrorSlugs,
+  getPendingSlugs,
+  getSlugB,
+  parseShortId,
+} from './runResults'
 import type { ComparisonRun } from './types'
 
 function makeRun(partial: Partial<ComparisonRun>): ComparisonRun {
@@ -80,6 +85,51 @@ describe('getPendingSlugs', () => {
       ],
     })
     expect(getPendingSlugs(run)).toEqual([])
+  })
+})
+
+describe('getSlugB', () => {
+  it('returns the paired B slug when slugPairs is present', () => {
+    const run = makeRun({
+      slugs: ['/about'],
+      slugPairs: [{ a: '/about', b: '/preview/de/about' }],
+    })
+    expect(getSlugB(run, '/about')).toBe('/preview/de/about')
+  })
+
+  it('falls back to the A slug for shared-slug and legacy runs', () => {
+    expect(getSlugB(makeRun({}), '/about')).toBe('/about')
+  })
+
+  it('falls back for an A slug not found in slugPairs', () => {
+    const run = makeRun({
+      slugPairs: [{ a: '/about', b: '/preview/de/about' }],
+    })
+    expect(getSlugB(run, '/contact')).toBe('/contact')
+  })
+
+  it('keeps existing helpers returning A-slugs on a pair run', () => {
+    const run = makeRun({
+      slugs: ['/', '/about', '/contact'],
+      slugPairs: [
+        { a: '/', b: '/preview/de/' },
+        { a: '/about', b: '/preview/de/about' },
+        { a: '/contact', b: '/preview/de/contact' },
+      ],
+      results: [
+        {
+          slug: '/',
+          mismatchPixels: 0,
+          mismatchPercent: 0,
+          status: 'error',
+          sizeDiff: false,
+          version: 1,
+          error: 'boom',
+        },
+      ],
+    })
+    expect(getErrorSlugs(run)).toEqual(['/'])
+    expect(getPendingSlugs(run)).toEqual(['/about', '/contact'])
   })
 })
 

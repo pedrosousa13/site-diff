@@ -2,15 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { ensureRunDir, saveMetadata } from '@/lib/storage'
 import { startRun } from '@/lib/runner'
+import { validateSlugPairs } from '@/lib/slugs'
 import { clampConcurrency } from '@/lib/types'
-import type { ComparisonRun, ComparisonConfig } from '@/lib/types'
+import type { ComparisonRun, ComparisonConfig, SlugPair } from '@/lib/types'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { baseUrlA, baseUrlB, slugs, config: userConfig } = body
+  const { baseUrlA, baseUrlB, config: userConfig } = body
   const concurrency = clampConcurrency(Number(body.concurrency))
 
-  if (!baseUrlA || !baseUrlB || !slugs?.length) {
+  // Clients send either a shared slug list or per-environment slug pairs.
+  // Pairs are re-validated here; `slugs` becomes the A-side identity list.
+  let slugs: string[] = body.slugs ?? []
+  let slugPairs: SlugPair[] | undefined
+  if (body.slugPairs !== undefined) {
+    const validated = validateSlugPairs(body.slugPairs)
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: 400 })
+    }
+    slugPairs = validated.pairs
+    slugs = slugPairs.map((p) => p.a)
+  }
+
+  if (!baseUrlA || !baseUrlB || !slugs.length) {
     return NextResponse.json(
       { error: 'Missing required fields: baseUrlA, baseUrlB, slugs' },
       { status: 400 },
@@ -34,6 +48,7 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
     config,
     slugs,
+    ...(slugPairs && { slugPairs }),
     results: [],
     status: 'running',
     concurrency,
