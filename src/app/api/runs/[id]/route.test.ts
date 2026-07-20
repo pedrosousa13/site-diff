@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-import { getMetadata, saveMetadata } from '@/lib/storage'
+import { getMetadata, saveMetadata, deleteRun } from '@/lib/storage'
 import type { ComparisonRun, PageResult } from '@/lib/types'
-import { PATCH } from './route'
+import { DELETE, PATCH } from './route'
 
-vi.mock('@/lib/storage', () => ({
-  getMetadata: vi.fn(),
-  saveMetadata: vi.fn(),
-  deleteRun: vi.fn(),
-}))
+vi.mock('@/lib/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/storage')>()
+  return {
+    ...actual,
+    getMetadata: vi.fn(),
+    saveMetadata: vi.fn(),
+    deleteRun: vi.fn(),
+  }
+})
 
 vi.mock('@/lib/runner', () => ({
   withRunLock: (_id: string, fn: () => Promise<unknown>) => fn(),
@@ -120,5 +124,89 @@ describe('PATCH review state', () => {
 
     expect(response.status).toBe(400)
     expect(saveMetadata).not.toHaveBeenCalled()
+  })
+})
+
+function makeDeleteRun(partial: Partial<ComparisonRun>): ComparisonRun {
+  return {
+    id: '2026-06-25-abc123',
+    baseUrlA: 'https://a',
+    baseUrlB: 'https://b',
+    createdAt: '2026-06-25T10:00:00.000Z',
+    config: {
+      viewport: { width: 1280, height: 720 },
+      fullPage: true,
+      delay: 0,
+      threshold: 0.1,
+      matchPercentCutoff: 0.05,
+    },
+    slugs: ['/'],
+    results: [],
+    status: 'completed',
+    ...partial,
+  }
+}
+
+function del(id: string) {
+  return DELETE({} as NextRequest, { params: Promise.resolve({ id }) })
+}
+
+describe('DELETE /api/runs/[id]', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejects traversal-style ids without touching the filesystem', async () => {
+    const response = await del('../../etc')
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Invalid run id' })
+    expect(deleteRun).not.toHaveBeenCalled()
+  })
+
+  it('refuses to delete a running run with 409', async () => {
+    vi.mocked(getMetadata).mockResolvedValue(
+      makeDeleteRun({ status: 'running' }),
+    )
+
+    const response = await del('2026-06-25-abc123')
+
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    expect(body.error).toBeTruthy()
+    expect(deleteRun).not.toHaveBeenCalled()
+  })
+
+  it('deletes a completed run', async () => {
+    vi.mocked(getMetadata).mockResolvedValue(
+      makeDeleteRun({ status: 'completed' }),
+    )
+
+    const response = await del('2026-06-25-abc123')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ success: true })
+    expect(deleteRun).toHaveBeenCalledWith('2026-06-25-abc123')
+  })
+
+  it('stays idempotent when the run does not exist', async () => {
+    vi.mocked(getMetadata).mockResolvedValue(null)
+
+    const response = await del('2026-06-25-abc123')
+
+    expect(response.status).toBe(200)
+    expect(deleteRun).toHaveBeenCalledWith('2026-06-25-abc123')
+  })
+})
+
+describe('deleteRun id validation', () => {
+  it('throws on traversal-style ids before removing anything', async () => {
+    const storage =
+      await vi.importActual<typeof import('@/lib/storage')>('@/lib/storage')
+
+    await expect(storage.deleteRun('../oops')).rejects.toThrow('Invalid run id')
+    await expect(storage.deleteRun('a/b')).rejects.toThrow('Invalid run id')
+    await expect(storage.deleteRun('a\\b')).rejects.toThrow('Invalid run id')
+    await expect(storage.deleteRun('')).rejects.toThrow('Invalid run id')
   })
 })

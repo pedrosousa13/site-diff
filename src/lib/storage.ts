@@ -46,7 +46,19 @@ export async function listRuns(): Promise<ComparisonRun[]> {
   }
 }
 
+export function isSafeRunId(runId: string): boolean {
+  return (
+    runId.length > 0 &&
+    !runId.includes('/') &&
+    !runId.includes('\\') &&
+    !runId.includes('..')
+  )
+}
+
 export async function deleteRun(runId: string): Promise<void> {
+  if (!isSafeRunId(runId)) {
+    throw new Error(`Invalid run id: ${runId}`)
+  }
   const runDir = path.join(DATA_DIR, runId)
   await fs.rm(runDir, { recursive: true, force: true })
 }
