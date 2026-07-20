@@ -54,12 +54,12 @@ async function compareSlug(
   run: ComparisonRun,
   slug: string,
   version: number,
+  slugBMap: Map<string, string>,
 ): Promise<PageResult> {
   const { id: runId, baseUrlA, baseUrlB, config } = run
   const urlA = new URL(slug, baseUrlA).toString()
   // In pair mode environment B has its own slug; storage stays keyed on the
   // A-slug (page identity), including the side-b screenshot below.
-  const slugBMap = getSlugBMap(run)
   const urlB = new URL(slugBMap.get(slug) ?? slug, baseUrlB).toString()
   const pathA = getScreenshotPath(runId, 'a', slug)
   const pathB = getScreenshotPath(runId, 'b', slug)
@@ -125,13 +125,14 @@ export function startRun(run: ComparisonRun, slugs: string[]): void {
   // Already clamped to [1, MAX_CONCURRENCY] when the run was created (compare route).
   // Each slug renders 2 pages in parallel, so peak Chromium contexts is 2x this.
   const concurrency = run.concurrency ?? DEFAULT_CONCURRENCY
+  const slugBMap = getSlugBMap(run)
   void (async () => {
     try {
       await mapWithConcurrency(slugs, concurrency, async (slug) => {
         const current = await getMetadata(run.id)
         const existing = current?.results.find((r) => r.slug === slug)
         const version = (existing?.version ?? 0) + 1
-        const result = await compareSlug(run, slug, version)
+        const result = await compareSlug(run, slug, version, slugBMap)
         await appendResult(run.id, result)
       })
     } finally {
