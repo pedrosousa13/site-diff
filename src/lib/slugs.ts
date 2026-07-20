@@ -58,34 +58,6 @@ function collectPairs(
 }
 
 /**
- * Pair two textareas line-by-line for "different slugs per environment" mode.
- * Trims lines and ignores trailing blank lines on both sides, then applies the
- * shared pairing rules (see collectPairs).
- */
-export function zipSlugPairs(textA: string, textB: string): SlugPairsResult {
-  const linesA = textA.split('\n').map((line) => line.trim())
-  const linesB = textB.split('\n').map((line) => line.trim())
-  while (linesA.length && !linesA[linesA.length - 1]) linesA.pop()
-  while (linesB.length && !linesB[linesB.length - 1]) linesB.pop()
-
-  if (linesA.length !== linesB.length) {
-    return {
-      ok: false,
-      error: `Environment A has ${linesA.length} slugs but environment B has ${linesB.length} — each line in A must pair with the same line in B`,
-    }
-  }
-
-  const rows = linesA.map((a, i) => ({ a, b: linesB[i] }))
-  return collectPairs(rows, {
-    missing: (i, aPresent) =>
-      `Line ${i + 1}: slug missing for environment ${aPresent ? 'B' : 'A'}`,
-    duplicate: (i, a) => `Duplicate environment-A slug "${a}" on line ${i + 1}`,
-    absolute: (i, slug) =>
-      `Line ${i + 1}: "${slug}" is an absolute URL — use a path`,
-  })
-}
-
-/**
  * Validate an untrusted `slugPairs` API payload. Same rules as zipSlugPairs
  * (non-empty trimmed slugs on both sides, unique A-slugs) applied to
  * already-zipped `{ a, b }` entries.
@@ -138,29 +110,6 @@ export function validateSlugs(input: unknown): SlugsResult {
     }
   }
   return { ok: true, slugs }
-}
-
-/**
- * Merge checklist-selected slugs with manually typed lines.
- * Trims entries, drops empties, removes duplicates, and preserves
- * first-seen order (selected first, then manual-only).
- */
-export function mergeSlugs(
-  selected: Iterable<string>,
-  manualText: string,
-): string[] {
-  const manual = manualText.split('\n')
-  const seen = new Set<string>()
-  const out: string[] = []
-
-  for (const raw of [...selected, ...manual]) {
-    const slug = raw.trim()
-    if (!slug || seen.has(slug)) continue
-    seen.add(slug)
-    out.push(slug)
-  }
-
-  return out
 }
 
 /**
