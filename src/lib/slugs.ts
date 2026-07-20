@@ -58,9 +58,9 @@ function collectPairs(
 }
 
 /**
- * Validate an untrusted `slugPairs` API payload. Same rules as zipSlugPairs
- * (non-empty trimmed slugs on both sides, unique A-slugs) applied to
- * already-zipped `{ a, b }` entries.
+ * Validate an untrusted `slugPairs` API payload: non-empty trimmed slugs on
+ * both sides, no absolute URLs, unique A-slugs — applied to already-zipped
+ * `{ a, b }` entries.
  */
 export function validateSlugPairs(input: unknown): SlugPairsResult {
   if (!Array.isArray(input) || !input.length) {
@@ -114,9 +114,9 @@ export function validateSlugs(input: unknown): SlugsResult {
 
 /**
  * Merge checklist-selected slugs (implicitly shared) with pairs typed in the
- * textarea. Selected slugs come first in first-seen order, like mergeSlugs; a
- * typed pair whose A-slug is also selected overrides that entry's B-slug in
- * place, because an explicit `a -> b` mapping beats the implicit shared one.
+ * textarea. Selected slugs come first in first-seen order; a typed pair whose
+ * A-slug is also selected overrides that entry's B-slug in place, because an
+ * explicit `a -> b` mapping beats the implicit shared one.
  */
 export function mergeSlugPairs(
   selected: Iterable<string>,
