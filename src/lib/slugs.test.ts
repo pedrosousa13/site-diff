@@ -4,6 +4,7 @@ import {
   zipSlugPairs,
   validateSlugPairs,
   parseSlugLines,
+  mergeSlugPairs,
 } from './slugs'
 
 describe('mergeSlugs', () => {
@@ -190,5 +191,34 @@ describe('parseSlugLines', () => {
   it('collects multiple errors with correct line numbers', () => {
     const { errors } = parseSlugLines('/a\n-> /b\n/c ->')
     expect(errors.map((e) => e.line)).toEqual([2, 3])
+  })
+})
+
+describe('mergeSlugPairs', () => {
+  const shared = (s: string) => ({ a: s, b: s })
+
+  it('unions selected slugs (as shared pairs) with typed pairs', () => {
+    expect(mergeSlugPairs(['/a'], [{ a: '/b', b: '/x' }])).toEqual([
+      shared('/a'),
+      { a: '/b', b: '/x' },
+    ])
+  })
+
+  it('lets a typed mapping override a selected shared slug in place', () => {
+    expect(
+      mergeSlugPairs(['/a', '/b'], [{ a: '/a', b: '/staging-a' }]),
+    ).toEqual([{ a: '/a', b: '/staging-a' }, shared('/b')])
+  })
+
+  it('dedupes selected slugs and trims them', () => {
+    expect(mergeSlugPairs([' /a ', '/a'], [])).toEqual([shared('/a')])
+  })
+
+  it('handles empty selection (typed only)', () => {
+    expect(mergeSlugPairs([], [shared('/x')])).toEqual([shared('/x')])
+  })
+
+  it('handles empty typed pairs (selection only)', () => {
+    expect(mergeSlugPairs(['/x'], [])).toEqual([shared('/x')])
   })
 })

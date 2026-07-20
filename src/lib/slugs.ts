@@ -122,6 +122,38 @@ export function mergeSlugs(
   return out
 }
 
+/**
+ * Merge checklist-selected slugs (implicitly shared) with pairs typed in the
+ * textarea. Selected slugs come first in first-seen order, like mergeSlugs; a
+ * typed pair whose A-slug is also selected overrides that entry's B-slug in
+ * place, because an explicit `a -> b` mapping beats the implicit shared one.
+ */
+export function mergeSlugPairs(
+  selected: Iterable<string>,
+  typed: SlugPair[],
+): SlugPair[] {
+  const out: SlugPair[] = []
+  const indexByA = new Map<string, number>()
+
+  for (const raw of selected) {
+    const slug = raw.trim()
+    if (!slug || indexByA.has(slug)) continue
+    indexByA.set(slug, out.length)
+    out.push({ a: slug, b: slug })
+  }
+  for (const pair of typed) {
+    const at = indexByA.get(pair.a)
+    if (at !== undefined) {
+      out[at] = pair
+    } else {
+      indexByA.set(pair.a, out.length)
+      out.push(pair)
+    }
+  }
+
+  return out
+}
+
 const ARROW = '->'
 
 function isAbsoluteUrl(slug: string): boolean {
