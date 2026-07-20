@@ -197,8 +197,12 @@ export default function CompareForm() {
   }
 
   // Live pairing hint driven by the same validator used on submit, so the
-  // preview never disagrees with what actually happens when you run.
-  const pairPreview = pairMode ? zipSlugPairs(slugsText, slugsTextB) : null
+  // preview never disagrees with what actually happens when you run. Stay
+  // neutral until B has content, so toggling the mode doesn't flash an error
+  // before the user has typed anything.
+  const pairBStarted = slugsTextB.trim() !== ''
+  const pairPreview =
+    pairMode && pairBStarted ? zipSlugPairs(slugsText, slugsTextB) : null
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -272,14 +276,19 @@ export default function CompareForm() {
           </div>
           <p className="mt-1 text-xs text-gray-500">
             Line 1 of A is compared against line 1 of B, and so on.{' '}
-            {pairPreview?.ok ? (
+            {!pairPreview ? null : pairPreview.ok ? (
               <span>
                 {pairPreview.pairs.length}{' '}
                 {pairPreview.pairs.length === 1 ? 'pair' : 'pairs'}
               </span>
             ) : (
-              <span className="text-amber-600">{pairPreview?.error}</span>
+              <span className="text-amber-600">{pairPreview.error}</span>
             )}
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            Each line is resolved against its Base URL, so enter paths. A full
+            <code className="mx-1">https://…</code>URL overrides the Base URL
+            for that page.
           </p>
         </div>
       ) : (

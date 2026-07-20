@@ -52,9 +52,10 @@ export function zipSlugPairs(textA: string, textB: string): SlugPairsResult {
   while (linesB.length && !linesB[linesB.length - 1]) linesB.pop()
 
   if (linesA.length !== linesB.length) {
+    const slugCount = (n: number) => `${n} ${n === 1 ? 'slug' : 'slugs'}`
     return {
       ok: false,
-      error: `Environment A has ${linesA.length} slugs but environment B has ${linesB.length} — each line in A must pair with the same line in B`,
+      error: `Environment A has ${slugCount(linesA.length)} but environment B has ${slugCount(linesB.length)} — each line in A must pair with the same line in B`,
     }
   }
 
@@ -87,6 +88,36 @@ export function validateSlugPairs(input: unknown): SlugPairsResult {
     missing: (i) => `slugPairs[${i}] must have non-empty "a" and "b" slugs`,
     duplicate: (_i, a) => `Duplicate environment-A slug "${a}"`,
   })
+}
+
+export type SlugsResult =
+  | { ok: true; slugs: string[] }
+  | { ok: false; error: string }
+
+/**
+ * Validate an untrusted shared `slugs` API payload: a non-empty array of
+ * non-empty strings. Trims and de-duplicates to match the client's mergeSlugs,
+ * so a hand-crafted payload can't smuggle in blanks or collide identities.
+ */
+export function validateSlugs(input: unknown): SlugsResult {
+  if (!Array.isArray(input) || !input.length) {
+    return { ok: false, error: 'slugs must be a non-empty array' }
+  }
+
+  const slugs: string[] = []
+  const seen = new Set<string>()
+  for (let i = 0; i < input.length; i++) {
+    const entry = input[i]
+    const slug = typeof entry === 'string' ? entry.trim() : ''
+    if (!slug) {
+      return { ok: false, error: `slugs[${i}] must be a non-empty string` }
+    }
+    if (seen.has(slug)) continue
+    seen.add(slug)
+    slugs.push(slug)
+  }
+
+  return { ok: true, slugs }
 }
 
 /**

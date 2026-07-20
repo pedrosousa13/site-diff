@@ -135,8 +135,8 @@ export default function DiffViewer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
+        <div className="flex items-center justify-between gap-4 p-4 border-b">
+          <div className="min-w-0">
             <h2 className="font-mono text-lg truncate">
               {slug}
               {slugB !== slug && (
