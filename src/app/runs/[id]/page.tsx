@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getMetadata } from '@/lib/storage'
+import { getAllSlugs } from '@/lib/runResults'
 import ResultsGrid from '@/components/ResultsGrid'
 
 export const dynamic = 'force-dynamic'
@@ -46,7 +47,7 @@ export default async function RunPage({
       rerunParams.append('slugsB', p.b)
     }
   } else {
-    for (const r of run.results) rerunParams.append('slugs', r.slug)
+    for (const s of getAllSlugs(run)) rerunParams.append('slugs', s)
   }
 
   return (
