@@ -100,6 +100,12 @@ export function validateSlugs(input: unknown): SlugsResult {
     }
     const slug = entry.trim()
     if (!slug || seen.has(slug)) continue
+    if (isAbsoluteUrl(slug)) {
+      return {
+        ok: false,
+        error: `"${slug}" is an absolute URL — use a path, the base URLs provide the host`,
+      }
+    }
     seen.add(slug)
     slugs.push(slug)
   }

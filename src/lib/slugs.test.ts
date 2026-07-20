@@ -167,4 +167,9 @@ describe('validateSlugs', () => {
     expect(validateSlugs([]).ok).toBe(false)
     expect(validateSlugs(['  ', '']).ok).toBe(false)
   })
+
+  it('rejects absolute URLs', () => {
+    expect(validateSlugs(['https://x.com/a']).ok).toBe(false)
+    expect(validateSlugs(['/a', 'http://x.com/b']).ok).toBe(false)
+  })
 })
