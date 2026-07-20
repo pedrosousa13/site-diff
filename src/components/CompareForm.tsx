@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { mergeSlugs, zipSlugPairs } from '@/lib/slugs'
+import { mergeSlugPairs, parseSlugLines } from '@/lib/slugs'
 import { DEFAULT_CONCURRENCY, MAX_CONCURRENCY } from '@/lib/types'
 
 const STORAGE_KEY = 'site-diff-form'
@@ -14,8 +14,6 @@ interface FormState {
   sitemapUrl: string
   clickSelectorsText: string
   concurrency?: number
-  pairMode?: boolean
-  slugsTextB?: string
 }
 
 function loadFromStorage(): FormState | null {
@@ -44,8 +42,6 @@ export default function CompareForm() {
   const [baseUrlA, setBaseUrlA] = useState('')
   const [baseUrlB, setBaseUrlB] = useState('')
   const [slugsText, setSlugsText] = useState('/')
-  const [pairMode, setPairMode] = useState(false)
-  const [slugsTextB, setSlugsTextB] = useState('')
   const [sitemapUrl, setSitemapUrl] = useState('')
   const [sitemapSlugs, setSitemapSlugs] = useState<string[]>([])
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set())
@@ -64,14 +60,21 @@ export default function CompareForm() {
     const urlSlugs = searchParams.getAll('slugs')
     const urlSlugsB = searchParams.getAll('slugsB')
 
-    if (urlA || urlB || urlSlugs.length || urlSlugsB.length) {
+    if (urlA || urlB || urlSlugs.length) {
       // URL params take priority (from "Run Again")
       if (urlA) setBaseUrlA(urlA)
       if (urlB) setBaseUrlB(urlB)
-      if (urlSlugs.length) setSlugsText(urlSlugs.join('\n'))
-      if (urlSlugsB.length) {
-        setPairMode(true)
-        setSlugsTextB(urlSlugsB.join('\n'))
+      if (urlSlugsB.length && urlSlugs.length) {
+        setSlugsText(
+          urlSlugs
+            .map((a, i) => {
+              const b = urlSlugsB[i]
+              return b && b !== a ? `${a} -> ${b}` : a
+            })
+            .join('\n'),
+        )
+      } else if (urlSlugs.length) {
+        setSlugsText(urlSlugs.join('\n'))
       }
     } else {
       // Fall back to localStorage
@@ -79,9 +82,25 @@ export default function CompareForm() {
       if (saved) {
         setBaseUrlA(saved.baseUrlA)
         setBaseUrlB(saved.baseUrlB)
-        setSlugsText(saved.slugsText)
-        setPairMode(saved.pairMode ?? false)
-        setSlugsTextB(saved.slugsTextB ?? '')
+        const legacy = saved as FormState & {
+          pairMode?: boolean
+          slugsTextB?: string
+        }
+        if (legacy.pairMode && legacy.slugsTextB) {
+          const linesB = legacy.slugsTextB.split('\n')
+          setSlugsText(
+            saved.slugsText
+              .split('\n')
+              .map((rawA, i) => {
+                const a = rawA.trim()
+                const b = (linesB[i] ?? '').trim()
+                return a && b && b !== a ? `${a} -> ${b}` : rawA
+              })
+              .join('\n'),
+          )
+        } else {
+          setSlugsText(saved.slugsText)
+        }
         setSitemapUrl(saved.sitemapUrl)
         setClickSelectorsText(saved.clickSelectorsText ?? '')
         if (saved.concurrency) setConcurrency(saved.concurrency)
@@ -97,8 +116,6 @@ export default function CompareForm() {
       baseUrlA,
       baseUrlB,
       slugsText,
-      pairMode,
-      slugsTextB,
       sitemapUrl,
       clickSelectorsText,
       concurrency,
@@ -107,8 +124,6 @@ export default function CompareForm() {
     baseUrlA,
     baseUrlB,
     slugsText,
-    pairMode,
-    slugsTextB,
     sitemapUrl,
     clickSelectorsText,
     concurrency,
@@ -145,21 +160,22 @@ export default function CompareForm() {
     setLoading(true)
     setError('')
 
-    let slugsPayload: {
-      slugs?: string[]
-      slugPairs?: { a: string; b: string }[]
+    const parsed = parseSlugLines(slugsText)
+    if (parsed.errors.length) {
+      const first = parsed.errors[0]
+      setError(`Line ${first.line}: ${first.message}`)
+      setLoading(false)
+      return
     }
-    if (pairMode) {
-      const zipped = zipSlugPairs(slugsText, slugsTextB)
-      if (!zipped.ok) {
-        setError(zipped.error)
-        setLoading(false)
-        return
-      }
-      slugsPayload = { slugPairs: zipped.pairs }
-    } else {
-      slugsPayload = { slugs: mergeSlugs(selectedSlugs, slugsText) }
+    const merged = mergeSlugPairs(selectedSlugs, parsed.pairs)
+    if (!merged.length) {
+      setError('Enter at least one page to compare')
+      setLoading(false)
+      return
     }
+    const slugsPayload = merged.every((p) => p.a === p.b)
+      ? { slugs: merged.map((p) => p.a) }
+      : { slugPairs: merged }
 
     const clickSelectors = clickSelectorsText
       .split('\n')
@@ -196,9 +212,13 @@ export default function CompareForm() {
     }
   }
 
-  // Live pairing hint driven by the same validator used on submit, so the
-  // preview never disagrees with what actually happens when you run.
-  const pairPreview = pairMode ? zipSlugPairs(slugsText, slugsTextB) : null
+  // Live per-line hint driven by the same parser used on submit, so the
+  // preview never disagrees with what actually happens when you run. Neutral
+  // (no error styling) while the textarea is empty.
+  const parsedPreview = parseSlugLines(slugsText)
+  const lineErrors = parsedPreview.errors
+  const pageCount = mergeSlugPairs(selectedSlugs, parsedPreview.pairs).length
+  const pairedCount = parsedPreview.pairs.filter((p) => p.a !== p.b).length
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -231,114 +251,63 @@ export default function CompareForm() {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={pairMode}
-          onChange={(e) => setPairMode(e.target.checked)}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Pages to compare (one per line; merged with any checked below)
+        </label>
+        <textarea
+          value={slugsText}
+          onChange={(e) => setSlugsText(e.target.value)}
+          rows={6}
+          placeholder={'/\n/about\n/de/uber-uns -> /en/about-us'}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
         />
-        Use different slugs per environment
-      </label>
-
-      {pairMode ? (
-        <div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Slugs for environment A (one per line)
-              </label>
-              <textarea
-                value={slugsText}
-                onChange={(e) => setSlugsText(e.target.value)}
-                rows={6}
-                placeholder={
-                  '/preview/de/\n/preview/acquisition-content/de/cc/ty_br_ilc/'
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Slugs for environment B (paired by line)
-              </label>
-              <textarea
-                value={slugsTextB}
-                onChange={(e) => setSlugsTextB(e.target.value)}
-                rows={6}
-                placeholder={'/\n/cc/ty_br_ilc/'}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              />
-            </div>
-          </div>
-          <p className="mt-1 text-xs text-gray-500">
-            Line 1 of A is compared against line 1 of B, and so on.{' '}
-            {pairPreview?.ok ? (
+        <p className="mt-1 text-xs text-gray-500">
+          Use <code className="font-mono">/a -&gt; /b</code> when a page has
+          different slugs in the two environments.{' '}
+          {lineErrors.length > 0 ? (
+            <span className="text-amber-600">
+              Line {lineErrors[0].line}: {lineErrors[0].message}
+              {lineErrors.length > 1 &&
+                ` (+${lineErrors.length - 1} more ${
+                  lineErrors.length === 2 ? 'issue' : 'issues'
+                })`}
+            </span>
+          ) : (
+            pageCount > 0 && (
               <span>
-                {pairPreview.pairs.length}{' '}
-                {pairPreview.pairs.length === 1 ? 'pair' : 'pairs'}
+                {pageCount} {pageCount === 1 ? 'page' : 'pages'}
+                {pairedCount > 0 && ` (${pairedCount} with a different B slug)`}
               </span>
-            ) : (
-              <span className="text-amber-600">{pairPreview?.error}</span>
-            )}
-          </p>
-        </div>
-      ) : (
-        <div>
+            )
+          )}
+        </p>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Pages to compare (one slug per line; merged with any checked below)
+            Or fetch from sitemap
           </label>
-          <textarea
-            value={slugsText}
-            onChange={(e) => setSlugsText(e.target.value)}
-            rows={6}
-            placeholder={'/\n/about\n/contact'}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+          <input
+            type="url"
+            value={sitemapUrl}
+            onChange={(e) => setSitemapUrl(e.target.value)}
+            placeholder="https://example.com/sitemap.xml"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-      )}
+        <button
+          type="button"
+          onClick={handleFetchSitemap}
+          disabled={loadingSitemap || !sitemapUrl}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+        >
+          {loadingSitemap ? 'Fetching...' : 'Fetch'}
+        </button>
+      </div>
 
-      {pairMode && (
-        <p className="text-xs text-gray-400">
-          Sitemap import is available only when both environments share the same
-          slugs.
-        </p>
-      )}
-
-      {pairMode && selectedSlugs.size > 0 && (
-        <p className="text-xs text-amber-600">
-          {selectedSlugs.size} sitemap-selected{' '}
-          {selectedSlugs.size === 1 ? 'slug is' : 'slugs are'} ignored in
-          per-environment mode — only the paired lines above are compared.
-        </p>
-      )}
-
-      {!pairMode && (
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Or fetch from sitemap
-            </label>
-            <input
-              type="url"
-              value={sitemapUrl}
-              onChange={(e) => setSitemapUrl(e.target.value)}
-              placeholder="https://example.com/sitemap.xml"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleFetchSitemap}
-            disabled={loadingSitemap || !sitemapUrl}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-          >
-            {loadingSitemap ? 'Fetching...' : 'Fetch'}
-          </button>
-        </div>
-      )}
-
-      {!pairMode &&
-        sitemapSlugs.length > 0 &&
+      {sitemapSlugs.length > 0 &&
         (() => {
           const filtered = sitemapSlugs.filter((s) =>
             s.includes(filterText.trim()),
