@@ -3,6 +3,7 @@ import {
   mergeSlugs,
   zipSlugPairs,
   validateSlugPairs,
+  validateSlugs,
   parseSlugLines,
   mergeSlugPairs,
 } from './slugs'
@@ -119,6 +120,13 @@ describe('validateSlugPairs', () => {
       ]).ok,
     ).toBe(false)
   })
+
+  it('rejects absolute URLs on either side', () => {
+    expect(validateSlugPairs([{ a: 'https://x.com/a', b: '/b' }]).ok).toBe(
+      false,
+    )
+    expect(validateSlugPairs([{ a: '/a', b: 'http://x.com/b' }]).ok).toBe(false)
+  })
 })
 
 describe('parseSlugLines', () => {
@@ -220,5 +228,29 @@ describe('mergeSlugPairs', () => {
 
   it('handles empty typed pairs (selection only)', () => {
     expect(mergeSlugPairs(['/x'], [])).toEqual([shared('/x')])
+  })
+})
+
+describe('validateSlugs', () => {
+  it('accepts an array of slugs, trimming and deduping', () => {
+    expect(validateSlugs([' /a ', '/b', '/a', ''])).toEqual({
+      ok: true,
+      slugs: ['/a', '/b'],
+    })
+  })
+
+  it('rejects non-arrays', () => {
+    expect(validateSlugs(undefined).ok).toBe(false)
+    expect(validateSlugs('nope').ok).toBe(false)
+    expect(validateSlugs({ 0: '/a' }).ok).toBe(false)
+  })
+
+  it('rejects arrays containing non-strings', () => {
+    expect(validateSlugs(['/a', 42]).ok).toBe(false)
+  })
+
+  it('rejects arrays with no non-empty slugs', () => {
+    expect(validateSlugs([]).ok).toBe(false)
+    expect(validateSlugs(['  ', '']).ok).toBe(false)
   })
 })

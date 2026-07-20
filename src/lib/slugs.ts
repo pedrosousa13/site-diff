@@ -19,6 +19,7 @@ export interface ParsedSlugLines {
 interface PairMessages {
   missing: (index: number, aPresent: boolean) => string
   duplicate: (index: number, a: string) => string
+  absolute: (index: number, slug: string) => string
 }
 
 /**
@@ -38,6 +39,12 @@ function collectPairs(
     if (!a && !b) continue
     if (!a || !b) {
       return { ok: false, error: messages.missing(i, Boolean(a)) }
+    }
+    if (isAbsoluteUrl(a) || isAbsoluteUrl(b)) {
+      return {
+        ok: false,
+        error: messages.absolute(i, isAbsoluteUrl(a) ? a : b),
+      }
     }
     if (seenA.has(a)) {
       return { ok: false, error: messages.duplicate(i, a) }
@@ -73,6 +80,8 @@ export function zipSlugPairs(textA: string, textB: string): SlugPairsResult {
     missing: (i, aPresent) =>
       `Line ${i + 1}: slug missing for environment ${aPresent ? 'B' : 'A'}`,
     duplicate: (i, a) => `Duplicate environment-A slug "${a}" on line ${i + 1}`,
+    absolute: (i, slug) =>
+      `Line ${i + 1}: "${slug}" is an absolute URL — use a path`,
   })
 }
 
@@ -96,7 +105,39 @@ export function validateSlugPairs(input: unknown): SlugPairsResult {
   return collectPairs(rows, {
     missing: (i) => `slugPairs[${i}] must have non-empty "a" and "b" slugs`,
     duplicate: (_i, a) => `Duplicate environment-A slug "${a}"`,
+    absolute: (i, slug) =>
+      `slugPairs[${i}]: "${slug}" is an absolute URL — use a path, the base URLs provide the host`,
   })
+}
+
+export type SlugsResult =
+  | { ok: true; slugs: string[] }
+  | { ok: false; error: string }
+
+/** Validate an untrusted `slugs` API payload: an array of strings with at
+ * least one non-empty entry. Trims and dedupes, preserving order. */
+export function validateSlugs(input: unknown): SlugsResult {
+  if (!Array.isArray(input)) {
+    return { ok: false, error: 'slugs must be an array of strings' }
+  }
+  const seen = new Set<string>()
+  const slugs: string[] = []
+  for (const entry of input) {
+    if (typeof entry !== 'string') {
+      return { ok: false, error: 'slugs must be an array of strings' }
+    }
+    const slug = entry.trim()
+    if (!slug || seen.has(slug)) continue
+    seen.add(slug)
+    slugs.push(slug)
+  }
+  if (!slugs.length) {
+    return {
+      ok: false,
+      error: 'slugs must contain at least one non-empty slug',
+    }
+  }
+  return { ok: true, slugs }
 }
 
 /**
