@@ -7,7 +7,12 @@ export async function GET(
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   const { path: pathSegments } = await params
-  const imagePath = path.join(process.cwd(), 'data', 'runs', ...pathSegments)
+  const baseDir = path.join(process.cwd(), 'data', 'runs')
+  const imagePath = path.resolve(baseDir, ...pathSegments)
+
+  if (!imagePath.startsWith(baseDir + path.sep)) {
+    return NextResponse.json({ error: 'Invalid image path' }, { status: 400 })
+  }
 
   try {
     const buffer = await fs.readFile(imagePath)
