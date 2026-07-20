@@ -35,7 +35,19 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const body = await request.json()
+  let body: Record<string, unknown>
+  try {
+    const parsed: unknown = await request.json()
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('not an object')
+    }
+    body = parsed as Record<string, unknown>
+  } catch {
+    return NextResponse.json(
+      { error: 'Expected a JSON object body' },
+      { status: 400 },
+    )
+  }
   const { slug } = body
 
   // Read-modify-write under the run lock with a fresh read, so review updates

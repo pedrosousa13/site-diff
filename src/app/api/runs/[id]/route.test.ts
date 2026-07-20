@@ -86,4 +86,38 @@ describe('PATCH review state', () => {
     expect(run.results[0]).toMatchObject({ viewed: true, checked: false })
     expect(saveMetadata).toHaveBeenCalledWith(run)
   })
+
+  it.each([[null], [5], ['nope'], [true]])(
+    'rejects JSON primitive body %j with 400',
+    async (primitive) => {
+      const request = new NextRequest('http://localhost/api/runs/run-1', {
+        method: 'PATCH',
+        body: JSON.stringify(primitive),
+      })
+
+      const response = await PATCH(request, {
+        params: Promise.resolve({ id: 'run-1' }),
+      })
+
+      expect(response.status).toBe(400)
+      expect(await response.json()).toEqual({
+        error: 'Expected a JSON object body',
+      })
+      expect(saveMetadata).not.toHaveBeenCalled()
+    },
+  )
+
+  it('rejects a malformed JSON body with 400', async () => {
+    const request = new NextRequest('http://localhost/api/runs/run-1', {
+      method: 'PATCH',
+      body: 'not json',
+    })
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'run-1' }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(saveMetadata).not.toHaveBeenCalled()
+  })
 })
