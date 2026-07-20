@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { RefreshCw, Check } from 'lucide-react'
+import { RefreshCw, Check, Eye } from 'lucide-react'
 import type { ComparisonRun, PageResult } from '@/lib/types'
 import {
   getAllSlugs,
@@ -91,6 +91,29 @@ export default function ResultsGrid({ run: initialRun }: Props) {
     [run.id],
   )
 
+  const openResult = useCallback(
+    (slug: string) => {
+      const result = run.results.find((r) => r.slug === slug)
+      if (!result) return
+
+      setSelectedSlug(slug)
+      if (result.viewed) return
+
+      setRun((prev) => ({
+        ...prev,
+        results: prev.results.map((r) =>
+          r.slug === slug ? { ...r, viewed: true } : r,
+        ),
+      }))
+      void fetch(`/api/runs/${run.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, viewed: true }),
+      })
+    },
+    [run.id, run.results],
+  )
+
   // Slugs the modal can navigate between: those with a loaded, non-re-running result.
   const openableSlugs = slugs.filter((s) => {
     const r = run.results.find((x) => x.slug === s)
@@ -155,7 +178,8 @@ export default function ResultsGrid({ run: initialRun }: Props) {
               runId={run.id}
               pending={!result || isRerunning(slug)}
               checked={Boolean(result?.checked)}
-              onClick={() => result && setSelectedSlug(slug)}
+              viewed={Boolean(result?.viewed)}
+              onClick={() => openResult(slug)}
               onRerun={() => rerun([slug])}
             />
           )
@@ -178,12 +202,12 @@ export default function ResultsGrid({ run: initialRun }: Props) {
           onClose={() => setSelectedSlug(null)}
           onPrev={
             currentIndex > 0
-              ? () => setSelectedSlug(openableSlugs[currentIndex - 1])
+              ? () => openResult(openableSlugs[currentIndex - 1])
               : undefined
           }
           onNext={
             currentIndex >= 0 && currentIndex < openableSlugs.length - 1
-              ? () => setSelectedSlug(openableSlugs[currentIndex + 1])
+              ? () => openResult(openableSlugs[currentIndex + 1])
               : undefined
           }
           position={
@@ -208,6 +232,7 @@ function ResultCard({
   runId,
   pending,
   checked,
+  viewed,
   onClick,
   onRerun,
 }: {
@@ -217,6 +242,7 @@ function ResultCard({
   runId: string
   pending: boolean
   checked: boolean
+  viewed: boolean
   onClick: () => void
   onRerun: () => void
 }) {
@@ -245,6 +271,14 @@ function ResultCard({
           title="Reviewed"
         >
           <Check className="w-3 h-3" strokeWidth={3} />
+        </span>
+      )}
+      {viewed && !checked && (
+        <span
+          className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center shadow"
+          title="Viewed"
+        >
+          <Eye className="w-3 h-3" />
         </span>
       )}
       <button

@@ -35,16 +35,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const { slug, checked } = await request.json()
+  const body = await request.json()
+  const { slug } = body
 
-  // Read-modify-write under the run lock with a fresh read, so toggling `checked`
-  // doesn't clobber a result an in-flight appendResult is writing.
+  // Read-modify-write under the run lock with a fresh read, so review updates
+  // don't clobber a result an in-flight appendResult is writing.
   const outcome = await withRunLock(id, async () => {
     const run = await getMetadata(id)
     if (!run) return 'run-not-found' as const
     const result = run.results.find((r) => r.slug === slug)
     if (!result) return 'slug-not-found' as const
-    result.checked = Boolean(checked)
+    if ('checked' in body) result.checked = Boolean(body.checked)
+    if ('viewed' in body) result.viewed = Boolean(body.viewed)
     await saveMetadata(run)
     return 'ok' as const
   })
