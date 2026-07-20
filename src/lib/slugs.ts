@@ -4,6 +4,16 @@ export type SlugPairsResult =
   | { ok: true; pairs: SlugPair[] }
   | { ok: false; error: string }
 
+export interface SlugLineError {
+  line: number
+  message: string
+}
+
+export interface ParsedSlugLines {
+  pairs: SlugPair[]
+  errors: SlugLineError[]
+}
+
 /** Messages a caller supplies for the per-row validation failures, so the two
  * entry points can phrase errors in their own terms (line numbers vs indices). */
 interface PairMessages {
@@ -110,4 +120,58 @@ export function mergeSlugs(
   }
 
   return out
+}
+
+const ARROW = '->'
+
+function isAbsoluteUrl(slug: string): boolean {
+  return /^https?:\/\//i.test(slug)
+}
+
+/**
+ * Parse the slugs textarea. One page per line: a plain line is a shared slug,
+ * `a -> b` pairs different slugs per environment. Pairing is per-line, so
+ * editing one line never shifts the pairing of the others. Error lines are
+ * reported individually and contribute no pair.
+ */
+export function parseSlugLines(text: string): ParsedSlugLines {
+  const pairs: SlugPair[] = []
+  const errors: SlugLineError[] = []
+  const seenA = new Set<string>()
+
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    const lineNo = i + 1
+    if (!line) continue
+
+    const parts = line.split(ARROW).map((part) => part.trim())
+    if (parts.length > 2) {
+      errors.push({ line: lineNo, message: `more than one "${ARROW}"` })
+      continue
+    }
+    const [a, b] = parts.length === 2 ? parts : [parts[0], parts[0]]
+    if (!a || !b) {
+      errors.push({
+        line: lineNo,
+        message: `missing slug ${a ? 'after' : 'before'} "${ARROW}"`,
+      })
+      continue
+    }
+    if (isAbsoluteUrl(a) || isAbsoluteUrl(b)) {
+      errors.push({
+        line: lineNo,
+        message: 'use a path like /about — the Base URLs provide the host',
+      })
+      continue
+    }
+    if (seenA.has(a)) {
+      errors.push({ line: lineNo, message: `duplicate slug "${a}"` })
+      continue
+    }
+    seenA.add(a)
+    pairs.push({ a, b })
+  }
+
+  return { pairs, errors }
 }

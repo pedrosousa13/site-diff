@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { mergeSlugs, zipSlugPairs, validateSlugPairs } from './slugs'
+import {
+  mergeSlugs,
+  zipSlugPairs,
+  validateSlugPairs,
+  parseSlugLines,
+} from './slugs'
 
 describe('mergeSlugs', () => {
   it('unions checked slugs with manual lines', () => {
@@ -112,5 +117,78 @@ describe('validateSlugPairs', () => {
         { a: '/a', b: '/y' },
       ]).ok,
     ).toBe(false)
+  })
+})
+
+describe('parseSlugLines', () => {
+  it('treats plain lines as shared slugs', () => {
+    expect(parseSlugLines('/\n/about')).toEqual({
+      pairs: [
+        { a: '/', b: '/' },
+        { a: '/about', b: '/about' },
+      ],
+      errors: [],
+    })
+  })
+
+  it('parses arrow lines into pairs and trims both sides', () => {
+    expect(parseSlugLines('/de/uber-uns ->  /en/about-us ')).toEqual({
+      pairs: [{ a: '/de/uber-uns', b: '/en/about-us' }],
+      errors: [],
+    })
+  })
+
+  it('mixes shared and paired lines', () => {
+    expect(parseSlugLines('/\n/about -> /about-us').pairs).toEqual([
+      { a: '/', b: '/' },
+      { a: '/about', b: '/about-us' },
+    ])
+  })
+
+  it('skips blank lines without shifting pairing or line numbers', () => {
+    const result = parseSlugLines('/a\n\n/b -> \n/c')
+    expect(result.pairs).toEqual([
+      { a: '/a', b: '/a' },
+      { a: '/c', b: '/c' },
+    ])
+    expect(result.errors).toEqual([
+      { line: 3, message: expect.stringContaining('after "->"') },
+    ])
+  })
+
+  it('errors on a missing side of an arrow', () => {
+    expect(parseSlugLines('-> /b').errors).toEqual([
+      { line: 1, message: expect.stringContaining('before "->"') },
+    ])
+  })
+
+  it('errors on more than one arrow in a line', () => {
+    const { pairs, errors } = parseSlugLines('/a -> /b -> /c')
+    expect(pairs).toEqual([])
+    expect(errors).toHaveLength(1)
+    expect(errors[0].line).toBe(1)
+  })
+
+  it('errors on absolute URLs on either side', () => {
+    expect(parseSlugLines('https://x.com/a').errors).toHaveLength(1)
+    expect(parseSlugLines('/a -> http://x.com/b').errors).toHaveLength(1)
+  })
+
+  it('errors on duplicate A-slugs, keeping the first pair', () => {
+    const { pairs, errors } = parseSlugLines('/a -> /x\n/a -> /y')
+    expect(pairs).toEqual([{ a: '/a', b: '/x' }])
+    expect(errors).toEqual([
+      { line: 2, message: expect.stringContaining('"/a"') },
+    ])
+  })
+
+  it('returns empty pairs and no errors for empty input', () => {
+    expect(parseSlugLines('')).toEqual({ pairs: [], errors: [] })
+    expect(parseSlugLines('\n  \n')).toEqual({ pairs: [], errors: [] })
+  })
+
+  it('collects multiple errors with correct line numbers', () => {
+    const { errors } = parseSlugLines('/a\n-> /b\n/c ->')
+    expect(errors.map((e) => e.line)).toEqual([2, 3])
   })
 })
