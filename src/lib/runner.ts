@@ -7,7 +7,7 @@ import {
   getScreenshotPath,
 } from './storage'
 import { mapWithConcurrency } from './concurrency'
-import { getSlugB } from './runResults'
+import { getSlugBMap } from './runResults'
 import { DEFAULT_CONCURRENCY } from './types'
 import type { ComparisonRun, PageResult } from './types'
 
@@ -59,7 +59,8 @@ async function compareSlug(
   const urlA = new URL(slug, baseUrlA).toString()
   // In pair mode environment B has its own slug; storage stays keyed on the
   // A-slug (page identity), including the side-b screenshot below.
-  const urlB = new URL(getSlugB(run, slug), baseUrlB).toString()
+  const slugBMap = getSlugBMap(run)
+  const urlB = new URL(slugBMap.get(slug) ?? slug, baseUrlB).toString()
   const pathA = getScreenshotPath(runId, 'a', slug)
   const pathB = getScreenshotPath(runId, 'b', slug)
 

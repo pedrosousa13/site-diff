@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import type { ComparisonRun, PageResult } from '@/lib/types'
 import {
   getAllSlugs,
   getErrorSlugs,
   getPendingSlugs,
-  getSlugB,
+  getSlugBMap,
 } from '@/lib/runResults'
 import DiffViewer from './DiffViewer'
 
@@ -23,6 +23,8 @@ export default function ResultsGrid({ run: initialRun }: Props) {
   // slug -> version captured when re-run was requested; cleared once a newer version arrives.
   const rerunning = useRef<Map<string, number>>(new Map())
   const [rerunTick, setRerunTick] = useState(0)
+
+  const slugBMap = useMemo(() => getSlugBMap(run), [run])
 
   const slugs = getAllSlugs(run)
   const pending = getPendingSlugs(run)
@@ -148,7 +150,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
             <ResultCard
               key={slug}
               slug={slug}
-              slugB={getSlugB(run, slug)}
+              slugB={slugBMap.get(slug) ?? slug}
               result={result}
               runId={run.id}
               pending={!result || isRerunning(slug)}
@@ -165,7 +167,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
         <DiffViewer
           runId={run.id}
           slug={selectedSlug}
-          slugB={getSlugB(run, selectedSlug)}
+          slugB={slugBMap.get(selectedSlug) ?? selectedSlug}
           result={run.results.find((r) => r.slug === selectedSlug)!}
           baseUrlA={run.baseUrlA}
           baseUrlB={run.baseUrlB}

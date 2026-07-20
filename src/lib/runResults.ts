@@ -8,10 +8,11 @@ export function getAllSlugs(run: ComparisonRun): string[] {
   return run.slugs ?? run.results.map((r) => r.slug)
 }
 
-/** Environment-B slug paired with `slugA`. Falls back to `slugA` itself for
- * shared-slug runs and legacy runs without `slugPairs`. */
-export function getSlugB(run: ComparisonRun, slugA: string): string {
-  return run.slugPairs?.find((p) => p.a === slugA)?.b ?? slugA
+/** A-slug → B-slug lookup for pair runs. Empty for shared-slug and legacy
+ * runs — callers fall back with `map.get(slug) ?? slug`. Built once per run
+ * snapshot so per-card renders avoid a linear find. */
+export function getSlugBMap(run: ComparisonRun): Map<string, string> {
+  return new Map((run.slugPairs ?? []).map((p) => [p.a, p.b]))
 }
 
 export function getErrorSlugs(run: ComparisonRun): string[] {

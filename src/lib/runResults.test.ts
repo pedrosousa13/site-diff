@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   getErrorSlugs,
   getPendingSlugs,
-  getSlugB,
+  getSlugBMap,
   parseShortId,
 } from './runResults'
 import type { ComparisonRun } from './types'
@@ -88,24 +88,24 @@ describe('getPendingSlugs', () => {
   })
 })
 
-describe('getSlugB', () => {
-  it('returns the paired B slug when slugPairs is present', () => {
+describe('getSlugBMap', () => {
+  it('maps A slugs to their paired B slugs', () => {
     const run = makeRun({
       slugs: ['/about'],
       slugPairs: [{ a: '/about', b: '/preview/de/about' }],
     })
-    expect(getSlugB(run, '/about')).toBe('/preview/de/about')
+    expect(getSlugBMap(run).get('/about')).toBe('/preview/de/about')
   })
 
-  it('falls back to the A slug for shared-slug and legacy runs', () => {
-    expect(getSlugB(makeRun({}), '/about')).toBe('/about')
+  it('returns an empty map for shared-slug and legacy runs', () => {
+    expect(getSlugBMap(makeRun({})).size).toBe(0)
   })
 
-  it('falls back for an A slug not found in slugPairs', () => {
+  it('has no entry for an A slug not in slugPairs (callers fall back)', () => {
     const run = makeRun({
       slugPairs: [{ a: '/about', b: '/preview/de/about' }],
     })
-    expect(getSlugB(run, '/contact')).toBe('/contact')
+    expect(getSlugBMap(run).get('/contact')).toBeUndefined()
   })
 
   it('keeps existing helpers returning A-slugs on a pair run', () => {
