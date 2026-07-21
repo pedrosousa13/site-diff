@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMetadata, deleteRun, saveMetadata } from '@/lib/storage'
+import {
+  getMetadata,
+  deleteRun,
+  saveMetadata,
+  isSafeRunId,
+} from '@/lib/storage'
 import { withRunLock } from '@/lib/runner'
 
 export async function GET(
@@ -22,8 +27,26 @@ export async function DELETE(
 ) {
   const { id } = await params
 
+  if (!isSafeRunId(id)) {
+    return NextResponse.json({ error: 'Invalid run id' }, { status: 400 })
+  }
+
   try {
-    await deleteRun(id)
+    // Delete under the run lock so we can't race an in-flight appendResult,
+    // and refuse while the background runner is still writing to the run.
+    const outcome = await withRunLock(id, async () => {
+      const run = await getMetadata(id)
+      if (run?.status === 'running') return 'running' as const
+      await deleteRun(id)
+      return 'deleted' as const
+    })
+
+    if (outcome === 'running') {
+      return NextResponse.json(
+        { error: 'Run is still in progress and cannot be deleted' },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete run' }, { status: 500 })
