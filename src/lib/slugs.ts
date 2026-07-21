@@ -4,11 +4,22 @@ export type SlugPairsResult =
   | { ok: true; pairs: SlugPair[] }
   | { ok: false; error: string }
 
+export interface SlugLineError {
+  line: number
+  message: string
+}
+
+export interface ParsedSlugLines {
+  pairs: SlugPair[]
+  errors: SlugLineError[]
+}
+
 /** Messages a caller supplies for the per-row validation failures, so the two
  * entry points can phrase errors in their own terms (line numbers vs indices). */
 interface PairMessages {
   missing: (index: number, aPresent: boolean) => string
   duplicate: (index: number, a: string) => string
+  absolute: (index: number, slug: string) => string
 }
 
 /**
@@ -29,6 +40,12 @@ function collectPairs(
     if (!a || !b) {
       return { ok: false, error: messages.missing(i, Boolean(a)) }
     }
+    if (isAbsoluteUrl(a) || isAbsoluteUrl(b)) {
+      return {
+        ok: false,
+        error: messages.absolute(i, isAbsoluteUrl(a) ? a : b),
+      }
+    }
     if (seenA.has(a)) {
       return { ok: false, error: messages.duplicate(i, a) }
     }
@@ -41,36 +58,9 @@ function collectPairs(
 }
 
 /**
- * Pair two textareas line-by-line for "different slugs per environment" mode.
- * Trims lines and ignores trailing blank lines on both sides, then applies the
- * shared pairing rules (see collectPairs).
- */
-export function zipSlugPairs(textA: string, textB: string): SlugPairsResult {
-  const linesA = textA.split('\n').map((line) => line.trim())
-  const linesB = textB.split('\n').map((line) => line.trim())
-  while (linesA.length && !linesA[linesA.length - 1]) linesA.pop()
-  while (linesB.length && !linesB[linesB.length - 1]) linesB.pop()
-
-  if (linesA.length !== linesB.length) {
-    const slugCount = (n: number) => `${n} ${n === 1 ? 'slug' : 'slugs'}`
-    return {
-      ok: false,
-      error: `Environment A has ${slugCount(linesA.length)} but environment B has ${slugCount(linesB.length)} — each line in A must pair with the same line in B`,
-    }
-  }
-
-  const rows = linesA.map((a, i) => ({ a, b: linesB[i] }))
-  return collectPairs(rows, {
-    missing: (i, aPresent) =>
-      `Line ${i + 1}: slug missing for environment ${aPresent ? 'B' : 'A'}`,
-    duplicate: (i, a) => `Duplicate environment-A slug "${a}" on line ${i + 1}`,
-  })
-}
-
-/**
- * Validate an untrusted `slugPairs` API payload. Same rules as zipSlugPairs
- * (non-empty trimmed slugs on both sides, unique A-slugs) applied to
- * already-zipped `{ a, b }` entries.
+ * Validate an untrusted `slugPairs` API payload: non-empty trimmed slugs on
+ * both sides, no absolute URLs, unique A-slugs — applied to already-zipped
+ * `{ a, b }` entries.
  */
 export function validateSlugPairs(input: unknown): SlugPairsResult {
   if (!Array.isArray(input) || !input.length) {
@@ -87,6 +77,8 @@ export function validateSlugPairs(input: unknown): SlugPairsResult {
   return collectPairs(rows, {
     missing: (i) => `slugPairs[${i}] must have non-empty "a" and "b" slugs`,
     duplicate: (_i, a) => `Duplicate environment-A slug "${a}"`,
+    absolute: (i, slug) =>
+      `slugPairs[${i}]: "${slug}" is an absolute URL — use a path, the base URLs provide the host`,
   })
 }
 
@@ -96,8 +88,9 @@ export type SlugsResult =
 
 /**
  * Validate an untrusted shared `slugs` API payload: a non-empty array of
- * non-empty strings. Trims and de-duplicates to match the client's mergeSlugs,
- * so a hand-crafted payload can't smuggle in blanks or collide identities.
+ * non-empty path strings. Trims and de-duplicates preserving order, so a
+ * hand-crafted payload can't smuggle in blanks, absolute URLs, or collide
+ * identities.
  */
 export function validateSlugs(input: unknown): SlugsResult {
   if (!Array.isArray(input) || !input.length) {
@@ -112,6 +105,12 @@ export function validateSlugs(input: unknown): SlugsResult {
     if (!slug) {
       return { ok: false, error: `slugs[${i}] must be a non-empty string` }
     }
+    if (isAbsoluteUrl(slug)) {
+      return {
+        ok: false,
+        error: `slugs[${i}]: "${slug}" is an absolute URL — use a path, the base URLs provide the host`,
+      }
+    }
     if (seen.has(slug)) continue
     seen.add(slug)
     slugs.push(slug)
@@ -121,24 +120,87 @@ export function validateSlugs(input: unknown): SlugsResult {
 }
 
 /**
- * Merge checklist-selected slugs with manually typed lines.
- * Trims entries, drops empties, removes duplicates, and preserves
- * first-seen order (selected first, then manual-only).
+ * Merge checklist-selected slugs (implicitly shared) with pairs typed in the
+ * textarea. Selected slugs come first in first-seen order; a typed pair whose
+ * A-slug is also selected overrides that entry's B-slug in place, because an
+ * explicit `a -> b` mapping beats the implicit shared one.
  */
-export function mergeSlugs(
+export function mergeSlugPairs(
   selected: Iterable<string>,
-  manualText: string,
-): string[] {
-  const manual = manualText.split('\n')
-  const seen = new Set<string>()
-  const out: string[] = []
+  typed: SlugPair[],
+): SlugPair[] {
+  const out: SlugPair[] = []
+  const indexByA = new Map<string, number>()
 
-  for (const raw of [...selected, ...manual]) {
+  for (const raw of selected) {
     const slug = raw.trim()
-    if (!slug || seen.has(slug)) continue
-    seen.add(slug)
-    out.push(slug)
+    if (!slug || indexByA.has(slug)) continue
+    indexByA.set(slug, out.length)
+    out.push({ a: slug, b: slug })
+  }
+  for (const pair of typed) {
+    const at = indexByA.get(pair.a)
+    if (at !== undefined) {
+      out[at] = pair
+    } else {
+      indexByA.set(pair.a, out.length)
+      out.push(pair)
+    }
   }
 
   return out
+}
+
+const ARROW = '->'
+
+function isAbsoluteUrl(slug: string): boolean {
+  return /^https?:\/\//i.test(slug)
+}
+
+/**
+ * Parse the slugs textarea. One page per line: a plain line is a shared slug,
+ * `a -> b` pairs different slugs per environment. Pairing is per-line, so
+ * editing one line never shifts the pairing of the others. Error lines are
+ * reported individually and contribute no pair.
+ */
+export function parseSlugLines(text: string): ParsedSlugLines {
+  const pairs: SlugPair[] = []
+  const errors: SlugLineError[] = []
+  const seenA = new Set<string>()
+
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    const lineNo = i + 1
+    if (!line) continue
+
+    const parts = line.split(ARROW).map((part) => part.trim())
+    if (parts.length > 2) {
+      errors.push({ line: lineNo, message: `more than one "${ARROW}"` })
+      continue
+    }
+    const [a, b] = parts.length === 2 ? parts : [parts[0], parts[0]]
+    if (!a || !b) {
+      errors.push({
+        line: lineNo,
+        message: `missing slug ${a ? 'after' : 'before'} "${ARROW}"`,
+      })
+      continue
+    }
+    if (isAbsoluteUrl(a) || isAbsoluteUrl(b)) {
+      errors.push({
+        line: lineNo,
+        message: 'use a path like /about — the Base URLs provide the host',
+      })
+      continue
+    }
+    if (seenA.has(a)) {
+      errors.push({ line: lineNo, message: `duplicate slug "${a}"` })
+      continue
+    }
+    seenA.add(a)
+    pairs.push({ a, b })
+  }
+
+  return { pairs, errors }
 }

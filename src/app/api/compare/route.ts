@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   const concurrency = clampConcurrency(Number(body.concurrency))
 
   // Clients send either a shared slug list or per-environment slug pairs.
-  // Both are re-validated here; `slugs` becomes the A-side identity list.
+  // Both are validated here; `slugs` becomes the A-side identity list.
   let slugs: string[]
   let slugPairs: SlugPair[] | undefined
   if (body.slugPairs != null) {
