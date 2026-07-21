@@ -1,3 +1,125 @@
+import type { SlugPair } from './types'
+
+export type SlugPairsResult =
+  | { ok: true; pairs: SlugPair[] }
+  | { ok: false; error: string }
+
+/** Messages a caller supplies for the per-row validation failures, so the two
+ * entry points can phrase errors in their own terms (line numbers vs indices). */
+interface PairMessages {
+  missing: (index: number, aPresent: boolean) => string
+  duplicate: (index: number, a: string) => string
+}
+
+/**
+ * Shared core for both entry points: apply the pairing rules to already-trimmed
+ * `{ a, b }` rows. A row blank on both sides is skipped; a row blank on exactly
+ * one side or a duplicate A-slug is an error rather than being silently dropped
+ * — dropping would shift the pairing of every later row.
+ */
+function collectPairs(
+  rows: SlugPair[],
+  messages: PairMessages,
+): SlugPairsResult {
+  const pairs: SlugPair[] = []
+  const seenA = new Set<string>()
+  for (let i = 0; i < rows.length; i++) {
+    const { a, b } = rows[i]
+    if (!a && !b) continue
+    if (!a || !b) {
+      return { ok: false, error: messages.missing(i, Boolean(a)) }
+    }
+    if (seenA.has(a)) {
+      return { ok: false, error: messages.duplicate(i, a) }
+    }
+    seenA.add(a)
+    pairs.push({ a, b })
+  }
+
+  if (!pairs.length) return { ok: false, error: 'Enter at least one slug pair' }
+  return { ok: true, pairs }
+}
+
+/**
+ * Pair two textareas line-by-line for "different slugs per environment" mode.
+ * Trims lines and ignores trailing blank lines on both sides, then applies the
+ * shared pairing rules (see collectPairs).
+ */
+export function zipSlugPairs(textA: string, textB: string): SlugPairsResult {
+  const linesA = textA.split('\n').map((line) => line.trim())
+  const linesB = textB.split('\n').map((line) => line.trim())
+  while (linesA.length && !linesA[linesA.length - 1]) linesA.pop()
+  while (linesB.length && !linesB[linesB.length - 1]) linesB.pop()
+
+  if (linesA.length !== linesB.length) {
+    const slugCount = (n: number) => `${n} ${n === 1 ? 'slug' : 'slugs'}`
+    return {
+      ok: false,
+      error: `Environment A has ${slugCount(linesA.length)} but environment B has ${slugCount(linesB.length)} — each line in A must pair with the same line in B`,
+    }
+  }
+
+  const rows = linesA.map((a, i) => ({ a, b: linesB[i] }))
+  return collectPairs(rows, {
+    missing: (i, aPresent) =>
+      `Line ${i + 1}: slug missing for environment ${aPresent ? 'B' : 'A'}`,
+    duplicate: (i, a) => `Duplicate environment-A slug "${a}" on line ${i + 1}`,
+  })
+}
+
+/**
+ * Validate an untrusted `slugPairs` API payload. Same rules as zipSlugPairs
+ * (non-empty trimmed slugs on both sides, unique A-slugs) applied to
+ * already-zipped `{ a, b }` entries.
+ */
+export function validateSlugPairs(input: unknown): SlugPairsResult {
+  if (!Array.isArray(input) || !input.length) {
+    return { ok: false, error: 'slugPairs must be a non-empty array' }
+  }
+
+  const rows = input.map((entry) => {
+    const e = entry as Partial<SlugPair> | null
+    return {
+      a: typeof e?.a === 'string' ? e.a.trim() : '',
+      b: typeof e?.b === 'string' ? e.b.trim() : '',
+    }
+  })
+  return collectPairs(rows, {
+    missing: (i) => `slugPairs[${i}] must have non-empty "a" and "b" slugs`,
+    duplicate: (_i, a) => `Duplicate environment-A slug "${a}"`,
+  })
+}
+
+export type SlugsResult =
+  | { ok: true; slugs: string[] }
+  | { ok: false; error: string }
+
+/**
+ * Validate an untrusted shared `slugs` API payload: a non-empty array of
+ * non-empty strings. Trims and de-duplicates to match the client's mergeSlugs,
+ * so a hand-crafted payload can't smuggle in blanks or collide identities.
+ */
+export function validateSlugs(input: unknown): SlugsResult {
+  if (!Array.isArray(input) || !input.length) {
+    return { ok: false, error: 'slugs must be a non-empty array' }
+  }
+
+  const slugs: string[] = []
+  const seen = new Set<string>()
+  for (let i = 0; i < input.length; i++) {
+    const entry = input[i]
+    const slug = typeof entry === 'string' ? entry.trim() : ''
+    if (!slug) {
+      return { ok: false, error: `slugs[${i}] must be a non-empty string` }
+    }
+    if (seen.has(slug)) continue
+    seen.add(slug)
+    slugs.push(slug)
+  }
+
+  return { ok: true, slugs }
+}
+
 /**
  * Merge checklist-selected slugs with manually typed lines.
  * Trims entries, drops empties, removes duplicates, and preserves

@@ -18,13 +18,25 @@ export interface PageResult {
   checked?: boolean
 }
 
+/** A page whose path differs between the two environments. */
+export interface SlugPair {
+  a: string
+  b: string
+}
+
 export interface ComparisonRun {
   id: string
   baseUrlA: string
   baseUrlB: string
   createdAt: string
   config: ComparisonConfig
+  /** Canonical page identities. In pair mode these are the A-side slugs
+   * (slugs[i] === slugPairs[i].a); results, filenames, and re-runs all key on
+   * them. */
   slugs: string[]
+  /** Present only for runs created in "different slugs per environment" mode.
+   * Paired by index with `slugs`. Absent on shared-slug and legacy runs. */
+  slugPairs?: SlugPair[]
   results: PageResult[]
   status: 'running' | 'completed' | 'failed'
   /** How many slugs to process in parallel. See runner.ts. Clamped to [1, MAX_CONCURRENCY]. */

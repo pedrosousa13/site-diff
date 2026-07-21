@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getMetadata } from '@/lib/storage'
+import { getAllSlugs } from '@/lib/runResults'
 import ResultsGrid from '@/components/ResultsGrid'
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,22 @@ export default async function RunPage({
     notFound()
   }
 
+  // Repeated `slugs`/`slugsB` params round-trip slugs safely even when a slug
+  // contains a comma (a single comma-joined value would split incorrectly).
+  const rerunParams = new URLSearchParams()
+  rerunParams.set('baseUrlA', run.baseUrlA)
+  rerunParams.set('baseUrlB', run.baseUrlB)
+  if (run.slugPairs) {
+    for (const p of run.slugPairs) {
+      rerunParams.append('slugs', p.a)
+      rerunParams.append('slugsB', p.b)
+    }
+  } else {
+    // getAllSlugs (not results) so a still-running/crashed run re-runs its
+    // full slug list, including pages that never produced a result.
+    for (const slug of getAllSlugs(run)) rerunParams.append('slugs', slug)
+  }
+
   return (
     <main className="container mx-auto p-8">
       <div className="mb-6">
@@ -54,7 +71,7 @@ export default async function RunPage({
           </div>
         </div>
         <Link
-          href={`/?baseUrlA=${encodeURIComponent(run.baseUrlA)}&baseUrlB=${encodeURIComponent(run.baseUrlB)}&slugs=${encodeURIComponent(run.results.map((r) => r.slug).join(','))}`}
+          href={`/?${rerunParams.toString()}`}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
         >
           Run Again

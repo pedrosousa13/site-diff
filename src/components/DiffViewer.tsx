@@ -14,6 +14,8 @@ import type { PageResult } from '@/lib/types'
 interface Props {
   runId: string
   slug: string
+  /** Environment-B slug; equals `slug` outside pair mode. */
+  slugB: string
   result: PageResult
   baseUrlA: string
   baseUrlB: string
@@ -30,6 +32,7 @@ type ViewMode = 'side-by-side' | 'diff' | 'slider'
 export default function DiffViewer({
   runId,
   slug,
+  slugB,
   result,
   baseUrlA,
   baseUrlB,
@@ -42,7 +45,7 @@ export default function DiffViewer({
 }: Props) {
   // Full page URLs for the current slug, matching how the screenshots were taken (runner.ts).
   const pageUrlA = new URL(slug, baseUrlA).toString()
-  const pageUrlB = new URL(slug, baseUrlB).toString()
+  const pageUrlB = new URL(slugB, baseUrlB).toString()
   const [mode, setMode] = useState<ViewMode>('side-by-side')
   const [sliderPos, setSliderPos] = useState(50)
   const [expanded, setExpanded] = useState(false)
@@ -132,9 +135,17 @@ export default function DiffViewer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
-            <h2 className="font-mono text-lg">{slug}</h2>
+        <div className="flex items-center justify-between gap-4 p-4 border-b">
+          <div className="min-w-0">
+            <h2 className="font-mono text-lg truncate">
+              {slug}
+              {slugB !== slug && (
+                <>
+                  <span className="text-gray-400"> vs </span>
+                  {slugB}
+                </>
+              )}
+            </h2>
             <span className="text-sm text-gray-500">
               {result.mismatchPercent.toFixed(2)}% difference
               {position && (

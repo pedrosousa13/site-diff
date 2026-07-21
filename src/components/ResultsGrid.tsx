@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import type { ComparisonRun, PageResult } from '@/lib/types'
 import { getAllSlugs, getErrorSlugs, getPendingSlugs } from '@/lib/runResults'
@@ -22,6 +22,11 @@ export default function ResultsGrid({ run: initialRun }: Props) {
   const slugs = getAllSlugs(run)
   const pending = getPendingSlugs(run)
   const errorSlugs = getErrorSlugs(run)
+  // O(1) env-B lookup, rebuilt only when the pairing changes (not per card).
+  const slugBFor = useMemo(() => {
+    const map = new Map((run.slugPairs ?? []).map((p) => [p.a, p.b]))
+    return (slugA: string) => map.get(slugA) ?? slugA
+  }, [run.slugPairs])
   const isRerunning = (slug: string) => rerunning.current.has(slug)
   const shouldPoll =
     run.status === 'running' || pending.length > 0 || rerunning.current.size > 0
@@ -143,6 +148,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
             <ResultCard
               key={slug}
               slug={slug}
+              slugB={slugBFor(slug)}
               result={result}
               runId={run.id}
               pending={!result || isRerunning(slug)}
@@ -159,6 +165,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
         <DiffViewer
           runId={run.id}
           slug={selectedSlug}
+          slugB={slugBFor(selectedSlug)}
           result={run.results.find((r) => r.slug === selectedSlug)!}
           baseUrlA={run.baseUrlA}
           baseUrlB={run.baseUrlB}
@@ -194,6 +201,7 @@ function RefreshSpinner() {
 
 function ResultCard({
   slug,
+  slugB,
   result,
   runId,
   pending,
@@ -202,6 +210,7 @@ function ResultCard({
   onRerun,
 }: {
   slug: string
+  slugB: string
   result: PageResult | undefined
   runId: string
   pending: boolean
@@ -255,6 +264,11 @@ function ResultCard({
           )
         )}
         <div className="font-mono text-sm truncate">{slug}</div>
+        {slugB !== slug && (
+          <div className="font-mono text-xs text-gray-400 truncate">
+            B: {slugB}
+          </div>
+        )}
         {pending ? (
           <div className="mt-1 h-3 w-16 rounded bg-gray-200 animate-pulse" />
         ) : (
