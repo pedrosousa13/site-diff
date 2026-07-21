@@ -1,6 +1,11 @@
 import { chromium, Browser, Page } from 'playwright'
 import type { ComparisonConfig } from './types'
 
+export interface ScreenshotResult {
+  statusCode: number | null
+  excluded: boolean
+}
+
 let browser: Browser | null = null
 
 async function getBrowser(): Promise<Browser> {
@@ -23,7 +28,7 @@ export async function takeScreenshot(
   url: string,
   outputPath: string,
   config: ComparisonConfig,
-): Promise<void> {
+): Promise<ScreenshotResult> {
   const b = await getBrowser()
   const context = await b.newContext({
     viewport: config.viewport,
@@ -35,8 +40,12 @@ export async function takeScreenshot(
   try {
     // Try original URL first, fall back to http if https fails
     let targetUrl = url
+    let response
     try {
-      await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 })
+      response = await page.goto(targetUrl, {
+        waitUntil: 'load',
+        timeout: 30000,
+      })
     } catch (err) {
       const isSSLError =
         err instanceof Error &&
@@ -46,10 +55,20 @@ export async function takeScreenshot(
       if (isSSLError && targetUrl.startsWith('https://')) {
         // Retry with http://
         targetUrl = targetUrl.replace('https://', 'http://')
-        await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 })
+        response = await page.goto(targetUrl, {
+          waitUntil: 'load',
+          timeout: 30000,
+        })
       } else {
         throw err
       }
+    }
+
+    const statusCode = response?.status() ?? null
+    if (
+      shouldExcludeHttpResponse(statusCode, config.excludeHttpErrors ?? true)
+    ) {
+      return { statusCode, excluded: true }
     }
 
     // Dismiss consent banners / modals by clicking (e.g. OneTrust accept button).
@@ -76,9 +95,22 @@ export async function takeScreenshot(
       path: outputPath,
       fullPage: config.fullPage,
     })
+    return { statusCode, excluded: false }
   } finally {
     await context.close()
   }
+}
+
+export function shouldExcludeHttpResponse(
+  statusCode: number | null,
+  excludeHttpErrors: boolean,
+): boolean {
+  return (
+    excludeHttpErrors &&
+    statusCode !== null &&
+    statusCode >= 400 &&
+    statusCode < 600
+  )
 }
 
 async function hideElements(page: Page, selectors: string[]): Promise<void> {

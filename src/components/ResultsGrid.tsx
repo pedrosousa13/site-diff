@@ -119,7 +119,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
   // Slugs the modal can navigate between: those with a loaded, non-re-running result.
   const openableSlugs = slugs.filter((s) => {
     const r = run.results.find((x) => x.slug === s)
-    return r && !isRerunning(s)
+    return r && r.status !== 'error' && !isRerunning(s)
   })
   const currentIndex = selectedSlug ? openableSlugs.indexOf(selectedSlug) : -1
 
@@ -198,7 +198,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
               pending={!result || isRerunning(slug)}
               checked={Boolean(result?.checked)}
               viewed={Boolean(result?.viewed)}
-              onClick={() => openResult(slug)}
+              onClick={() => result?.status !== 'error' && openResult(slug)}
               onRerun={() => rerun([slug])}
             />
           )
@@ -302,7 +302,7 @@ function ResultCard({
       )}
       <button
         onClick={onClick}
-        disabled={pending}
+        disabled={pending || result?.status === 'error'}
         className="w-full text-left disabled:cursor-default"
       >
         {pending ? (
@@ -329,7 +329,12 @@ function ResultCard({
         ) : (
           <div className="text-xs text-gray-500 mt-1 break-words">
             {result!.status === 'error'
-              ? result!.error
+              ? [
+                  result!.statusCodeA && `A: HTTP ${result!.statusCodeA}`,
+                  result!.statusCodeB && `B: HTTP ${result!.statusCodeB}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || result!.error
               : `${result!.mismatchPercent.toFixed(2)}% diff`}
           </div>
         )}

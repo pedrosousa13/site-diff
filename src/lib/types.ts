@@ -4,6 +4,7 @@ export interface ComparisonConfig {
   delay: number
   threshold: number
   matchPercentCutoff: number
+  excludeHttpErrors?: boolean
   hideSelectors?: string[]
   clickSelectors?: string[]
 }
@@ -15,6 +16,8 @@ export interface PageResult {
   status: 'match' | 'diff' | 'error'
   sizeDiff: boolean
   error?: string
+  statusCodeA?: number
+  statusCodeB?: number
   version: number
   checked?: boolean
   viewed?: boolean
@@ -51,6 +54,7 @@ export const DEFAULT_CONFIG: ComparisonConfig = {
   delay: 500,
   threshold: 0.1,
   matchPercentCutoff: 0.05,
+  excludeHttpErrors: true,
 }
 
 /** Upper bound for parallel slug processing. Each slug renders 2 pages, so the

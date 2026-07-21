@@ -1,4 +1,8 @@
-import { takeScreenshot, closeBrowser } from './screenshotter'
+import {
+  takeScreenshot,
+  closeBrowser,
+  type ScreenshotResult,
+} from './screenshotter'
 import { diffImages, determineStatus } from './differ'
 import {
   getMetadata,
@@ -50,7 +54,7 @@ export function withRunLock<T>(
 // Keep the shared browser open while any run is in flight.
 let activeRuns = 0
 
-async function compareSlug(
+export async function compareSlug(
   run: ComparisonRun,
   slug: string,
   version: number,
@@ -67,10 +71,45 @@ async function compareSlug(
   // Never throw: any failure (screenshot or diff) becomes an error result so a
   // single bad slug can't abort the batch or strand the run in 'running'.
   try {
-    await Promise.all([
+    const [settledA, settledB] = await Promise.allSettled([
       takeScreenshot(urlA, pathA, config),
       takeScreenshot(urlB, pathB, config),
     ])
+
+    const problem = (
+      side: 'A' | 'B',
+      settled: PromiseSettledResult<ScreenshotResult>,
+    ): string | null => {
+      if (settled.status === 'rejected') {
+        const reason = settled.reason
+        return `${side} failed: ${reason instanceof Error ? reason.message : String(reason)}`
+      }
+      return settled.value.excluded
+        ? `${side} returned HTTP ${settled.value.statusCode}`
+        : null
+    }
+    const statusCode = (settled: PromiseSettledResult<ScreenshotResult>) =>
+      settled.status === 'fulfilled' && settled.value.excluded
+        ? (settled.value.statusCode ?? undefined)
+        : undefined
+
+    const problems = [problem('A', settledA), problem('B', settledB)].filter(
+      (message): message is string => Boolean(message),
+    )
+    if (problems.length > 0) {
+      return {
+        slug,
+        mismatchPixels: 0,
+        mismatchPercent: 0,
+        status: 'error',
+        sizeDiff: false,
+        version,
+        error: problems.join('; '),
+        statusCodeA: statusCode(settledA),
+        statusCodeB: statusCode(settledB),
+      }
+    }
+
     const diffPath = getDiffPath(runId, slug)
     const diff = await diffImages(pathA, pathB, diffPath, config.threshold)
     return {
