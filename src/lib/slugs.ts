@@ -204,3 +204,12 @@ export function parseSlugLines(text: string): ParsedSlugLines {
 
   return { pairs, errors }
 }
+
+/** Sitemap checkbox-list filter: substring match on the trimmed query. */
+export function filterSitemapSlugs(
+  slugs: string[],
+  filterText: string,
+): string[] {
+  const query = filterText.trim()
+  return slugs.filter((slug) => slug.includes(query))
+}

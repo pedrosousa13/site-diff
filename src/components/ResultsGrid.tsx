@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw, Check, Eye } from 'lucide-react'
 import type { ComparisonRun, PageResult } from '@/lib/types'
 import {
@@ -17,16 +18,46 @@ interface Props {
 }
 
 const POLL_MS = 1500
+const RESULT_ROW_ESTIMATE = 240
+const RESULT_ROW_GAP = 16
+
+export function getResultColumnCount(viewportWidth: number): number {
+  if (viewportWidth >= 1024) return 4
+  if (viewportWidth >= 768) return 3
+  return 2
+}
+
+function useResultColumnCount(): number {
+  const [columnCount, setColumnCount] = useState(() =>
+    typeof window !== 'undefined' ? getResultColumnCount(window.innerWidth) : 2,
+  )
+
+  useEffect(() => {
+    const update = () => setColumnCount(getResultColumnCount(window.innerWidth))
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
+  return columnCount
+}
 
 export default function ResultsGrid({ run: initialRun }: Props) {
   const [run, setRun] = useState<ComparisonRun>(initialRun)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<ResultSortMode>('diff-desc')
+  const [gridOffset, setGridOffset] = useState(0)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const columnCount = useResultColumnCount()
   // slug -> version captured when re-run was requested; cleared once a newer version arrives.
   const rerunning = useRef<Map<string, number>>(new Map())
   const [rerunTick, setRerunTick] = useState(0)
 
   const slugBMap = useMemo(() => getSlugBMap(run), [run])
+  const resultsBySlug = useMemo(
+    () => new Map(run.results.map((result) => [result.slug, result])),
+    [run.results],
+  )
 
   const slugs = useMemo(() => sortResultSlugs(run, sortMode), [run, sortMode])
   const pending = getPendingSlugs(run)
@@ -34,6 +65,28 @@ export default function ResultsGrid({ run: initialRun }: Props) {
   const isRerunning = (slug: string) => rerunning.current.has(slug)
   const shouldPoll =
     run.status === 'running' || pending.length > 0 || rerunning.current.size > 0
+  const resultVirtualizer = useWindowVirtualizer({
+    count: Math.ceil(slugs.length / columnCount),
+    estimateSize: () => RESULT_ROW_ESTIMATE,
+    gap: RESULT_ROW_GAP,
+    overscan: 2,
+    scrollMargin: gridOffset,
+    useFlushSync: false,
+  })
+
+  useEffect(() => {
+    const update = () => {
+      const top = gridRef.current?.getBoundingClientRect().top
+      setGridOffset(top === undefined ? 0 : top + window.scrollY)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [run.status, pending.length, errorSlugs.length])
+
+  useEffect(() => {
+    resultVirtualizer.measure()
+  }, [columnCount, resultVirtualizer])
 
   const refetch = useCallback(async () => {
     const res = await fetch(`/api/runs/${run.id}`, { cache: 'no-store' })
@@ -41,8 +94,11 @@ export default function ResultsGrid({ run: initialRun }: Props) {
     const next: ComparisonRun = await res.json()
     // Clear re-run markers whose result version has advanced.
     let changed = false
+    const nextResultsBySlug = new Map(
+      next.results.map((result) => [result.slug, result]),
+    )
     for (const [slug, atClick] of rerunning.current) {
-      const r = next.results.find((x) => x.slug === slug)
+      const r = nextResultsBySlug.get(slug)
       if (r && r.version > atClick) {
         rerunning.current.delete(slug)
         changed = true
@@ -62,7 +118,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
     async (slugsToRun: string[]) => {
       if (!slugsToRun.length) return
       for (const slug of slugsToRun) {
-        const current = run.results.find((r) => r.slug === slug)
+        const current = resultsBySlug.get(slug)
         rerunning.current.set(slug, current?.version ?? 0)
       }
       setRerunTick((t) => t + 1)
@@ -73,7 +129,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
       })
       refetch()
     },
-    [run.id, run.results, refetch],
+    [run.id, resultsBySlug, refetch],
   )
 
   const toggleChecked = useCallback(
@@ -95,7 +151,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
 
   const openResult = useCallback(
     (slug: string) => {
-      const result = run.results.find((r) => r.slug === slug)
+      const result = resultsBySlug.get(slug)
       if (!result) return
 
       setSelectedSlug(slug)
@@ -113,15 +169,18 @@ export default function ResultsGrid({ run: initialRun }: Props) {
         body: JSON.stringify({ slug, viewed: true }),
       })
     },
-    [run.id, run.results],
+    [run.id, resultsBySlug],
   )
 
-  // Slugs the modal can navigate between: those with a loaded, non-re-running result.
+  // Slugs the modal can navigate between: those with a loaded, non-re-running, non-error result.
   const openableSlugs = slugs.filter((s) => {
-    const r = run.results.find((x) => x.slug === s)
+    const r = resultsBySlug.get(s)
     return r && r.status !== 'error' && !isRerunning(s)
   })
   const currentIndex = selectedSlug ? openableSlugs.indexOf(selectedSlug) : -1
+  const selectedResult = selectedSlug
+    ? resultsBySlug.get(selectedSlug)
+    : undefined
 
   const matches = run.results.filter((r) => r.status === 'match').length
   const diffs = run.results.filter((r) => r.status === 'diff').length
@@ -185,39 +244,60 @@ export default function ResultsGrid({ run: initialRun }: Props) {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {slugs.map((slug) => {
-          const result = run.results.find((r) => r.slug === slug)
+      <div
+        ref={gridRef}
+        className="relative w-full"
+        style={{ height: resultVirtualizer.getTotalSize() }}
+      >
+        {resultVirtualizer.getVirtualItems().map((virtualRow) => {
+          const start = virtualRow.index * columnCount
+          const rowSlugs = slugs.slice(start, start + columnCount)
           return (
-            <ResultCard
-              key={slug}
-              slug={slug}
-              slugB={slugBMap.get(slug) ?? slug}
-              result={result}
-              runId={run.id}
-              pending={!result || isRerunning(slug)}
-              checked={Boolean(result?.checked)}
-              viewed={Boolean(result?.viewed)}
-              onClick={() => result?.status !== 'error' && openResult(slug)}
-              onRerun={() => rerun([slug])}
-            />
+            <div
+              key={virtualRow.key}
+              ref={resultVirtualizer.measureElement}
+              data-index={virtualRow.index}
+              className="absolute top-0 left-0 w-full grid gap-4"
+              style={{
+                gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+                transform: `translateY(${virtualRow.start - gridOffset}px)`,
+              }}
+            >
+              {rowSlugs.map((slug) => {
+                const result = resultsBySlug.get(slug)
+                return (
+                  <ResultCard
+                    key={slug}
+                    slug={slug}
+                    slugB={slugBMap.get(slug) ?? slug}
+                    result={result}
+                    runId={run.id}
+                    pending={!result || isRerunning(slug)}
+                    checked={Boolean(result?.checked)}
+                    viewed={Boolean(result?.viewed)}
+                    onClick={() =>
+                      result?.status !== 'error' && openResult(slug)
+                    }
+                    onRerun={() => rerun([slug])}
+                  />
+                )
+              })}
+            </div>
           )
         })}
       </div>
 
       {/* Modal */}
-      {selectedSlug && run.results.find((r) => r.slug === selectedSlug) && (
+      {selectedSlug && selectedResult && (
         <DiffViewer
           runId={run.id}
           slug={selectedSlug}
           slugB={slugBMap.get(selectedSlug) ?? selectedSlug}
-          result={run.results.find((r) => r.slug === selectedSlug)!}
+          result={selectedResult}
           baseUrlA={run.baseUrlA}
           baseUrlB={run.baseUrlB}
           initialThreshold={run.config.threshold}
-          checked={Boolean(
-            run.results.find((r) => r.slug === selectedSlug)!.checked,
-          )}
+          checked={Boolean(selectedResult.checked)}
           onToggleChecked={toggleChecked}
           onClose={() => setSelectedSlug(null)}
           onPrev={

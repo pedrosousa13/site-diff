@@ -4,6 +4,7 @@ import {
   validateSlugs,
   parseSlugLines,
   mergeSlugPairs,
+  filterSitemapSlugs,
 } from './slugs'
 
 describe('validateSlugPairs', () => {
@@ -171,5 +172,21 @@ describe('validateSlugs', () => {
   it('rejects absolute URLs', () => {
     expect(validateSlugs(['https://x.com/a']).ok).toBe(false)
     expect(validateSlugs(['/a', 'http://x.com/b']).ok).toBe(false)
+  })
+})
+
+describe('filterSitemapSlugs', () => {
+  it('keeps slugs containing the filter substring', () => {
+    expect(
+      filterSitemapSlugs(['/mba', '/about', '/mba/rankings'], '/mba'),
+    ).toEqual(['/mba', '/mba/rankings'])
+  })
+
+  it('trims the filter text', () => {
+    expect(filterSitemapSlugs(['/a', '/b'], '  /a  ')).toEqual(['/a'])
+  })
+
+  it('returns everything for an empty filter', () => {
+    expect(filterSitemapSlugs(['/a', '/b'], '')).toEqual(['/a', '/b'])
   })
 })
