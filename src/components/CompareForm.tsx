@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { mergeSlugPairs, parseSlugLines } from '@/lib/slugs'
+import { parseSelectorLines, findInvalidSelector } from '@/lib/selectors'
 import { DEFAULT_CONCURRENCY, MAX_CONCURRENCY } from '@/lib/types'
 
 const STORAGE_KEY = 'site-diff-form'
@@ -13,6 +14,7 @@ interface FormState {
   slugsText: string
   sitemapUrl: string
   clickSelectorsText: string
+  hideSelectorsText: string
   concurrency?: number
 }
 
@@ -47,6 +49,7 @@ export default function CompareForm() {
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set())
   const [filterText, setFilterText] = useState('')
   const [clickSelectorsText, setClickSelectorsText] = useState('')
+  const [hideSelectorsText, setHideSelectorsText] = useState('')
   const [concurrency, setConcurrency] = useState(DEFAULT_CONCURRENCY)
   const [loading, setLoading] = useState(false)
   const [loadingSitemap, setLoadingSitemap] = useState(false)
@@ -76,6 +79,15 @@ export default function CompareForm() {
       } else if (urlSlugs.length) {
         setSlugsText(urlSlugs.join('\n'))
       }
+      // Still hydrate fields URL params don't carry, so the save
+      // effect doesn't clobber them in storage
+      const saved = loadFromStorage()
+      if (saved) {
+        setSitemapUrl(saved.sitemapUrl)
+        setClickSelectorsText(saved.clickSelectorsText ?? '')
+        setHideSelectorsText(saved.hideSelectorsText ?? '')
+        if (saved.concurrency) setConcurrency(saved.concurrency)
+      }
     } else {
       // Fall back to localStorage
       const saved = loadFromStorage()
@@ -103,6 +115,7 @@ export default function CompareForm() {
         }
         setSitemapUrl(saved.sitemapUrl)
         setClickSelectorsText(saved.clickSelectorsText ?? '')
+        setHideSelectorsText(saved.hideSelectorsText ?? '')
         if (saved.concurrency) setConcurrency(saved.concurrency)
       }
     }
@@ -118,6 +131,7 @@ export default function CompareForm() {
       slugsText,
       sitemapUrl,
       clickSelectorsText,
+      hideSelectorsText,
       concurrency,
     })
   }, [
@@ -126,6 +140,7 @@ export default function CompareForm() {
     slugsText,
     sitemapUrl,
     clickSelectorsText,
+    hideSelectorsText,
     concurrency,
     mounted,
   ])
@@ -177,13 +192,22 @@ export default function CompareForm() {
       ? { slugs: merged.map((p) => p.a) }
       : { slugPairs: merged }
 
-    const clickSelectors = clickSelectorsText
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const clickSelectors = parseSelectorLines(clickSelectorsText)
+    const hideSelectors = parseSelectorLines(hideSelectorsText)
+
+    const invalidSelector = findInvalidSelector([
+      ...clickSelectors,
+      ...hideSelectors,
+    ])
+    if (invalidSelector) {
+      setError(`Invalid CSS selector: "${invalidSelector}"`)
+      setLoading(false)
+      return
+    }
 
     const config: Record<string, unknown> = {}
     if (clickSelectors.length) config.clickSelectors = clickSelectors
+    if (hideSelectors.length) config.hideSelectors = hideSelectors
 
     try {
       const res = await fetch('/api/compare', {
@@ -388,6 +412,22 @@ export default function CompareForm() {
         <p className="mt-1 text-xs text-gray-500">
           Clicked after load to close consent banners / modals. Missing elements
           are skipped. Works across different domains.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Hide elements (one CSS selector per line)
+        </label>
+        <textarea
+          value={hideSelectorsText}
+          onChange={(e) => setHideSelectorsText(e.target.value)}
+          rows={2}
+          placeholder={'.cookie-banner\niframe'}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Hidden before screenshots are taken. Works across different domains.
         </p>
       </div>
 
