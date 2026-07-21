@@ -4,8 +4,9 @@ import {
   getPendingSlugs,
   getSlugBMap,
   parseShortId,
+  sortResultSlugs,
 } from './runResults'
-import type { ComparisonRun } from './types'
+import type { ComparisonRun, PageResult } from './types'
 
 function makeRun(partial: Partial<ComparisonRun>): ComparisonRun {
   return {
@@ -23,6 +24,21 @@ function makeRun(partial: Partial<ComparisonRun>): ComparisonRun {
     results: [],
     status: 'running',
     ...partial,
+  }
+}
+
+function makeResult(
+  slug: string,
+  status: PageResult['status'],
+  mismatchPercent = 0,
+): PageResult {
+  return {
+    slug,
+    mismatchPixels: mismatchPercent,
+    mismatchPercent,
+    status,
+    sizeDiff: false,
+    version: 1,
   }
 }
 
@@ -130,6 +146,124 @@ describe('getSlugBMap', () => {
     })
     expect(getErrorSlugs(run)).toEqual(['/'])
     expect(getPendingSlugs(run)).toEqual(['/about', '/contact'])
+  })
+})
+
+describe('sortResultSlugs', () => {
+  it('sorts completed results by largest diff, followed by errors and pending', () => {
+    const run = makeRun({
+      slugs: ['/pending', '/low-b', '/error', '/high', '/match', '/low-a'],
+      results: [
+        makeResult('/low-b', 'diff', 2),
+        makeResult('/error', 'error'),
+        makeResult('/high', 'diff', 20),
+        makeResult('/match', 'match'),
+        makeResult('/low-a', 'diff', 2),
+      ],
+    })
+
+    expect(sortResultSlugs(run, 'diff-desc')).toEqual([
+      '/high',
+      '/low-a',
+      '/low-b',
+      '/match',
+      '/error',
+      '/pending',
+    ])
+  })
+
+  it('sorts every slug by name', () => {
+    const run = makeRun({
+      slugs: ['/zebra', '/about', '/pending', '/contact'],
+      results: [
+        makeResult('/zebra', 'diff', 10),
+        makeResult('/about', 'error'),
+        makeResult('/contact', 'match'),
+      ],
+    })
+
+    expect(sortResultSlugs(run, 'name')).toEqual([
+      '/about',
+      '/contact',
+      '/pending',
+      '/zebra',
+    ])
+  })
+
+  it('sorts errors, diffs, matches, and pending with slug tie-breakers', () => {
+    const run = makeRun({
+      slugs: [
+        '/pending-b',
+        '/match',
+        '/diff-b',
+        '/error-b',
+        '/pending-a',
+        '/diff-a',
+        '/error-a',
+      ],
+      results: [
+        makeResult('/match', 'match'),
+        makeResult('/diff-b', 'diff', 20),
+        makeResult('/error-b', 'error'),
+        makeResult('/diff-a', 'diff', 10),
+        makeResult('/error-a', 'error'),
+      ],
+    })
+
+    expect(sortResultSlugs(run, 'status')).toEqual([
+      '/error-a',
+      '/error-b',
+      '/diff-a',
+      '/diff-b',
+      '/match',
+      '/pending-a',
+      '/pending-b',
+    ])
+  })
+
+  it('does not mutate the run and recomputes when a streamed result arrives', () => {
+    const run = makeRun({
+      // Input order deliberately differs from the sorted output so an
+      // in-place sort of run.slugs would be caught below.
+      slugs: ['/pending', '/existing'],
+      results: [makeResult('/existing', 'diff', 5)],
+    })
+
+    expect(sortResultSlugs(run, 'diff-desc')).toEqual(['/existing', '/pending'])
+    expect(run.slugs).toEqual(['/pending', '/existing'])
+    expect(run.results).toEqual([makeResult('/existing', 'diff', 5)])
+
+    const updatedRun = {
+      ...run,
+      results: [...run.results, makeResult('/pending', 'diff', 10)],
+    }
+    expect(sortResultSlugs(updatedRun, 'diff-desc')).toEqual([
+      '/pending',
+      '/existing',
+    ])
+  })
+
+  it('breaks name ties with en-locale collation regardless of environment', () => {
+    const run = makeRun({
+      slugs: ['/z', '/é', '/a'],
+      results: [],
+    })
+    expect(sortResultSlugs(run, 'name')).toEqual(['/a', '/é', '/z'])
+  })
+
+  it('sorts by the A-slug for pair runs, keyed independent of the B-slug', () => {
+    const run = makeRun({
+      slugs: ['/about', '/contact'],
+      slugPairs: [
+        { a: '/about', b: '/preview/de/zzz' },
+        { a: '/contact', b: '/preview/de/aaa' },
+      ],
+      results: [
+        makeResult('/about', 'diff', 5),
+        makeResult('/contact', 'diff', 5),
+      ],
+    })
+    expect(sortResultSlugs(run, 'name')).toEqual(['/about', '/contact'])
   })
 })
 

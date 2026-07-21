@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { RefreshCw, Check, Eye } from 'lucide-react'
 import type { ComparisonRun, PageResult } from '@/lib/types'
 import {
-  getAllSlugs,
   getErrorSlugs,
   getPendingSlugs,
   getSlugBMap,
+  sortResultSlugs,
+  type ResultSortMode,
 } from '@/lib/runResults'
 import DiffViewer from './DiffViewer'
 
@@ -20,13 +21,14 @@ const POLL_MS = 1500
 export default function ResultsGrid({ run: initialRun }: Props) {
   const [run, setRun] = useState<ComparisonRun>(initialRun)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<ResultSortMode>('diff-desc')
   // slug -> version captured when re-run was requested; cleared once a newer version arrives.
   const rerunning = useRef<Map<string, number>>(new Map())
   const [rerunTick, setRerunTick] = useState(0)
 
   const slugBMap = useMemo(() => getSlugBMap(run), [run])
 
-  const slugs = getAllSlugs(run)
+  const slugs = useMemo(() => sortResultSlugs(run, sortMode), [run, sortMode])
   const pending = getPendingSlugs(run)
   const errorSlugs = getErrorSlugs(run)
   const isRerunning = (slug: string) => rerunning.current.has(slug)
@@ -163,6 +165,23 @@ export default function ResultsGrid({ run: initialRun }: Props) {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="flex justify-end mb-4">
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          Sort by
+          <select
+            value={sortMode}
+            onChange={(event) =>
+              setSortMode(event.target.value as ResultSortMode)
+            }
+            className="px-3 py-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="diff-desc">Largest diff first</option>
+            <option value="name">Name (A–Z)</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
       </div>
 
       {/* Grid */}
