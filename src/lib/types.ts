@@ -3,6 +3,7 @@ export interface ComparisonConfig {
   fullPage: boolean
   delay: number
   threshold: number
+  matchPercentCutoff: number
   hideSelectors?: string[]
   clickSelectors?: string[]
 }
@@ -49,6 +50,7 @@ export const DEFAULT_CONFIG: ComparisonConfig = {
   fullPage: true,
   delay: 500,
   threshold: 0.1,
+  matchPercentCutoff: 0.05,
 }
 
 /** Upper bound for parallel slug processing. Each slug renders 2 pages, so the

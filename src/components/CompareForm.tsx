@@ -4,7 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { mergeSlugPairs, parseSlugLines } from '@/lib/slugs'
 import { parseSelectorLines, findInvalidSelector } from '@/lib/selectors'
-import { DEFAULT_CONCURRENCY, MAX_CONCURRENCY } from '@/lib/types'
+import { parseMatchPercentCutoff } from '@/lib/cutoffInput'
+import {
+  DEFAULT_CONCURRENCY,
+  DEFAULT_CONFIG,
+  MAX_CONCURRENCY,
+} from '@/lib/types'
 
 const STORAGE_KEY = 'site-diff-form'
 
@@ -15,6 +20,8 @@ interface FormState {
   sitemapUrl: string
   clickSelectorsText: string
   hideSelectorsText: string
+  threshold?: number
+  matchPercentCutoff?: number
   concurrency?: number
 }
 
@@ -50,6 +57,10 @@ export default function CompareForm() {
   const [filterText, setFilterText] = useState('')
   const [clickSelectorsText, setClickSelectorsText] = useState('')
   const [hideSelectorsText, setHideSelectorsText] = useState('')
+  const [threshold, setThreshold] = useState(DEFAULT_CONFIG.threshold)
+  const [matchPercentCutoffText, setMatchPercentCutoffText] = useState(
+    String(DEFAULT_CONFIG.matchPercentCutoff),
+  )
   const [concurrency, setConcurrency] = useState(DEFAULT_CONCURRENCY)
   const [loading, setLoading] = useState(false)
   const [loadingSitemap, setLoadingSitemap] = useState(false)
@@ -86,6 +97,10 @@ export default function CompareForm() {
         setSitemapUrl(saved.sitemapUrl)
         setClickSelectorsText(saved.clickSelectorsText ?? '')
         setHideSelectorsText(saved.hideSelectorsText ?? '')
+        setThreshold(saved.threshold ?? DEFAULT_CONFIG.threshold)
+        setMatchPercentCutoffText(
+          String(saved.matchPercentCutoff ?? DEFAULT_CONFIG.matchPercentCutoff),
+        )
         if (saved.concurrency) setConcurrency(saved.concurrency)
       }
     } else {
@@ -116,6 +131,10 @@ export default function CompareForm() {
         setSitemapUrl(saved.sitemapUrl)
         setClickSelectorsText(saved.clickSelectorsText ?? '')
         setHideSelectorsText(saved.hideSelectorsText ?? '')
+        setThreshold(saved.threshold ?? DEFAULT_CONFIG.threshold)
+        setMatchPercentCutoffText(
+          String(saved.matchPercentCutoff ?? DEFAULT_CONFIG.matchPercentCutoff),
+        )
         if (saved.concurrency) setConcurrency(saved.concurrency)
       }
     }
@@ -132,6 +151,10 @@ export default function CompareForm() {
       sitemapUrl,
       clickSelectorsText,
       hideSelectorsText,
+      threshold,
+      matchPercentCutoff:
+        parseMatchPercentCutoff(matchPercentCutoffText) ??
+        DEFAULT_CONFIG.matchPercentCutoff,
       concurrency,
     })
   }, [
@@ -141,6 +164,8 @@ export default function CompareForm() {
     sitemapUrl,
     clickSelectorsText,
     hideSelectorsText,
+    threshold,
+    matchPercentCutoffText,
     concurrency,
     mounted,
   ])
@@ -175,6 +200,13 @@ export default function CompareForm() {
     setLoading(true)
     setError('')
 
+    const matchPercentCutoff = parseMatchPercentCutoff(matchPercentCutoffText)
+    if (matchPercentCutoff === null) {
+      setError('Match cutoff must be a number between 0 and 100')
+      setLoading(false)
+      return
+    }
+
     const parsed = parseSlugLines(slugsText)
     if (parsed.errors.length) {
       const first = parsed.errors[0]
@@ -205,7 +237,10 @@ export default function CompareForm() {
       return
     }
 
-    const config: Record<string, unknown> = {}
+    const config: Record<string, unknown> = {
+      threshold,
+      matchPercentCutoff,
+    }
     if (clickSelectors.length) config.clickSelectors = clickSelectors
     if (hideSelectors.length) config.hideSelectors = hideSelectors
 
@@ -429,6 +464,44 @@ export default function CompareForm() {
         <p className="mt-1 text-xs text-gray-500">
           Hidden before screenshots are taken. Works across different domains.
         </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Per-pixel threshold
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.01}
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Pixel sensitivity from 0 to 1. Higher values tolerate more visual
+            noise.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Match cutoff (%)
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            value={matchPercentCutoffText}
+            onChange={(e) => setMatchPercentCutoffText(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Pages at or below this mismatch percentage are treated as matches.
+          </p>
+        </div>
       </div>
 
       <div>

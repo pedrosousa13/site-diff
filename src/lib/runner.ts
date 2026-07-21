@@ -77,7 +77,7 @@ async function compareSlug(
       slug,
       mismatchPixels: diff.mismatchPixels,
       mismatchPercent: diff.mismatchPercent,
-      status: determineStatus(diff.mismatchPercent),
+      status: determineStatus(diff.mismatchPercent, config.matchPercentCutoff),
       sizeDiff: diff.sizeDiff,
       version,
     }

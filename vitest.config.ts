@@ -1,10 +1,15 @@
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
+
+const alias = { '@': fileURLToPath(new URL('./src', import.meta.url)) }
 
 export default defineConfig({
   esbuild: { jsx: 'automatic' },
+  resolve: { alias },
   test: {
     projects: [
       {
+        resolve: { alias },
         test: {
           name: 'node',
           environment: 'node',
@@ -12,6 +17,7 @@ export default defineConfig({
         },
       },
       {
+        resolve: { alias },
         test: {
           name: 'jsdom',
           environment: 'jsdom',
