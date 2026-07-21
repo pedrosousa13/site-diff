@@ -47,7 +47,9 @@ export default async function RunPage({
       rerunParams.append('slugsB', p.b)
     }
   } else {
-    for (const s of getAllSlugs(run)) rerunParams.append('slugs', s)
+    // getAllSlugs (not results) so a still-running/crashed run re-runs its
+    // full slug list, including pages that never produced a result.
+    for (const slug of getAllSlugs(run)) rerunParams.append('slugs', slug)
   }
 
   return (

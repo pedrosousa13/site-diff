@@ -146,26 +146,26 @@ describe('mergeSlugPairs', () => {
 })
 
 describe('validateSlugs', () => {
-  it('accepts an array of slugs, trimming and deduping', () => {
-    expect(validateSlugs([' /a ', '/b', '/a', ''])).toEqual({
+  it('accepts valid slugs, trims, and dedups', () => {
+    expect(validateSlugs([' /a ', '/b', '/a'])).toEqual({
       ok: true,
       slugs: ['/a', '/b'],
     })
   })
 
-  it('rejects non-arrays', () => {
+  it('rejects non-arrays and empty arrays', () => {
     expect(validateSlugs(undefined).ok).toBe(false)
     expect(validateSlugs('nope').ok).toBe(false)
     expect(validateSlugs({ 0: '/a' }).ok).toBe(false)
-  })
-
-  it('rejects arrays containing non-strings', () => {
-    expect(validateSlugs(['/a', 42]).ok).toBe(false)
-  })
-
-  it('rejects arrays with no non-empty slugs', () => {
     expect(validateSlugs([]).ok).toBe(false)
-    expect(validateSlugs(['  ', '']).ok).toBe(false)
+  })
+
+  it('rejects blank or non-string entries with their index', () => {
+    const blank = validateSlugs(['/a', '  '])
+    expect(blank.ok).toBe(false)
+    if (!blank.ok) expect(blank.error).toContain('slugs[1]')
+    expect(validateSlugs(['/a', 42]).ok).toBe(false)
+    expect(validateSlugs(['/a', null]).ok).toBe(false)
   })
 
   it('rejects absolute URLs', () => {

@@ -86,35 +86,36 @@ export type SlugsResult =
   | { ok: true; slugs: string[] }
   | { ok: false; error: string }
 
-/** Validate an untrusted `slugs` API payload: an array of strings with at
- * least one non-empty entry. Trims and dedupes, preserving order. */
+/**
+ * Validate an untrusted shared `slugs` API payload: a non-empty array of
+ * non-empty path strings. Trims and de-duplicates preserving order, so a
+ * hand-crafted payload can't smuggle in blanks, absolute URLs, or collide
+ * identities.
+ */
 export function validateSlugs(input: unknown): SlugsResult {
-  if (!Array.isArray(input)) {
-    return { ok: false, error: 'slugs must be an array of strings' }
+  if (!Array.isArray(input) || !input.length) {
+    return { ok: false, error: 'slugs must be a non-empty array' }
   }
-  const seen = new Set<string>()
+
   const slugs: string[] = []
-  for (const entry of input) {
-    if (typeof entry !== 'string') {
-      return { ok: false, error: 'slugs must be an array of strings' }
+  const seen = new Set<string>()
+  for (let i = 0; i < input.length; i++) {
+    const entry = input[i]
+    const slug = typeof entry === 'string' ? entry.trim() : ''
+    if (!slug) {
+      return { ok: false, error: `slugs[${i}] must be a non-empty string` }
     }
-    const slug = entry.trim()
-    if (!slug || seen.has(slug)) continue
     if (isAbsoluteUrl(slug)) {
       return {
         ok: false,
-        error: `"${slug}" is an absolute URL — use a path, the base URLs provide the host`,
+        error: `slugs[${i}]: "${slug}" is an absolute URL — use a path, the base URLs provide the host`,
       }
     }
+    if (seen.has(slug)) continue
     seen.add(slug)
     slugs.push(slug)
   }
-  if (!slugs.length) {
-    return {
-      ok: false,
-      error: 'slugs must contain at least one non-empty slug',
-    }
-  }
+
   return { ok: true, slugs }
 }
 
