@@ -210,3 +210,22 @@ describe('deleteRun id validation', () => {
     await expect(storage.deleteRun('')).rejects.toThrow('Invalid run id')
   })
 })
+
+describe('isSafeRunId', () => {
+  it.each([['.'], ['..'], [''], ['/etc'], ['a/b'], ['a\\b']])(
+    'rejects %j',
+    async (runId) => {
+      const storage =
+        await vi.importActual<typeof import('@/lib/storage')>('@/lib/storage')
+
+      expect(storage.isSafeRunId(runId)).toBe(false)
+    },
+  )
+
+  it('accepts a normal run id', async () => {
+    const storage =
+      await vi.importActual<typeof import('@/lib/storage')>('@/lib/storage')
+
+    expect(storage.isSafeRunId('2026-06-25-abc123')).toBe(true)
+  })
+})

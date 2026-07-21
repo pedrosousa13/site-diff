@@ -46,12 +46,21 @@ export async function listRuns(): Promise<ComparisonRun[]> {
   }
 }
 
+// Validates a runId by resolving it against DATA_DIR and requiring the
+// result to land exactly one level below it. This rejects '.', '..', '',
+// absolute paths, and anything that resolves outside (or too deep inside)
+// DATA_DIR — e.g. `path.join(DATA_DIR, '.') === DATA_DIR` would otherwise
+// let a runId of '.' address the entire runs directory. The separator
+// checks are kept as an extra guard since a literal '\\' in a runId is not
+// a path separator on POSIX and would otherwise pass the resolve check.
 export function isSafeRunId(runId: string): boolean {
+  if (runId.length === 0 || runId.includes('/') || runId.includes('\\')) {
+    return false
+  }
+  const resolved = path.resolve(DATA_DIR, runId)
   return (
-    runId.length > 0 &&
-    !runId.includes('/') &&
-    !runId.includes('\\') &&
-    !runId.includes('..')
+    resolved.startsWith(DATA_DIR + path.sep) &&
+    path.dirname(resolved) === DATA_DIR
   )
 }
 
