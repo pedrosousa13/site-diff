@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { mapWithConcurrency } from './concurrency'
+import { deriveDefaultConcurrency, mapWithConcurrency } from './concurrency'
+
+describe('deriveDefaultConcurrency', () => {
+  it.each([
+    [0, 1],
+    [1, 1],
+    [2, 1],
+    [8, 4],
+    [32, 5],
+  ])('uses half of %i CPUs, clamped to %i', (cpuCount, expected) => {
+    expect(deriveDefaultConcurrency(cpuCount)).toBe(expected)
+  })
+})
 
 describe('mapWithConcurrency', () => {
   it('returns results in input order', async () => {

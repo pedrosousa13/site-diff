@@ -5,11 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { mergeSlugPairs, parseSlugLines } from '@/lib/slugs'
 import { parseSelectorLines, findInvalidSelector } from '@/lib/selectors'
 import { parseMatchPercentCutoff } from '@/lib/cutoffInput'
-import {
-  DEFAULT_CONCURRENCY,
-  DEFAULT_CONFIG,
-  MAX_CONCURRENCY,
-} from '@/lib/types'
+import { DEFAULT_CONFIG, MAX_CONCURRENCY } from '@/lib/types'
 
 const STORAGE_KEY = 'site-diff-form'
 
@@ -42,7 +38,11 @@ function saveToStorage(state: FormState) {
   } catch {}
 }
 
-export default function CompareForm() {
+interface Props {
+  defaultConcurrency: number
+}
+
+export default function CompareForm({ defaultConcurrency }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
@@ -61,7 +61,7 @@ export default function CompareForm() {
   const [matchPercentCutoffText, setMatchPercentCutoffText] = useState(
     String(DEFAULT_CONFIG.matchPercentCutoff),
   )
-  const [concurrency, setConcurrency] = useState(DEFAULT_CONCURRENCY)
+  const [concurrency, setConcurrency] = useState(defaultConcurrency)
   const [loading, setLoading] = useState(false)
   const [loadingSitemap, setLoadingSitemap] = useState(false)
   const [error, setError] = useState('')
