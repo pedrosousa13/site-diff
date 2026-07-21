@@ -18,6 +18,7 @@ interface FormState {
   hideSelectorsText: string
   threshold?: number
   matchPercentCutoff?: number
+  excludeHttpErrors?: boolean
   concurrency?: number
 }
 
@@ -61,6 +62,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
   const [matchPercentCutoffText, setMatchPercentCutoffText] = useState(
     String(DEFAULT_CONFIG.matchPercentCutoff),
   )
+  const [excludeHttpErrors, setExcludeHttpErrors] = useState(true)
   const [concurrency, setConcurrency] = useState(defaultConcurrency)
   const [loading, setLoading] = useState(false)
   const [loadingSitemap, setLoadingSitemap] = useState(false)
@@ -73,6 +75,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
     // Repeated params, so a slug containing a comma survives the round-trip.
     const urlSlugs = searchParams.getAll('slugs')
     const urlSlugsB = searchParams.getAll('slugsB')
+    const urlExcludeHttpErrors = searchParams.get('excludeHttpErrors')
 
     if (urlA || urlB || urlSlugs.length) {
       // URL params take priority (from "Run Again")
@@ -90,6 +93,9 @@ export default function CompareForm({ defaultConcurrency }: Props) {
       } else if (urlSlugs.length) {
         setSlugsText(urlSlugs.join('\n'))
       }
+      if (urlExcludeHttpErrors !== null) {
+        setExcludeHttpErrors(urlExcludeHttpErrors !== 'false')
+      }
       // Still hydrate fields URL params don't carry, so the save
       // effect doesn't clobber them in storage
       const saved = loadFromStorage()
@@ -101,6 +107,9 @@ export default function CompareForm({ defaultConcurrency }: Props) {
         setMatchPercentCutoffText(
           String(saved.matchPercentCutoff ?? DEFAULT_CONFIG.matchPercentCutoff),
         )
+        if (urlExcludeHttpErrors === null) {
+          setExcludeHttpErrors(saved.excludeHttpErrors ?? true)
+        }
         if (saved.concurrency) setConcurrency(saved.concurrency)
       }
     } else {
@@ -135,6 +144,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
         setMatchPercentCutoffText(
           String(saved.matchPercentCutoff ?? DEFAULT_CONFIG.matchPercentCutoff),
         )
+        setExcludeHttpErrors(saved.excludeHttpErrors ?? true)
         if (saved.concurrency) setConcurrency(saved.concurrency)
       }
     }
@@ -155,6 +165,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
       matchPercentCutoff:
         parseMatchPercentCutoff(matchPercentCutoffText) ??
         DEFAULT_CONFIG.matchPercentCutoff,
+      excludeHttpErrors,
       concurrency,
     })
   }, [
@@ -166,6 +177,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
     hideSelectorsText,
     threshold,
     matchPercentCutoffText,
+    excludeHttpErrors,
     concurrency,
     mounted,
   ])
@@ -240,6 +252,7 @@ export default function CompareForm({ defaultConcurrency }: Props) {
     const config: Record<string, unknown> = {
       threshold,
       matchPercentCutoff,
+      excludeHttpErrors,
     }
     if (clickSelectors.length) config.clickSelectors = clickSelectors
     if (hideSelectors.length) config.hideSelectors = hideSelectors
@@ -464,6 +477,24 @@ export default function CompareForm({ defaultConcurrency }: Props) {
         <p className="mt-1 text-xs text-gray-500">
           Hidden before screenshots are taken. Works across different domains.
         </p>
+      </div>
+
+      <div>
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={excludeHttpErrors}
+            onChange={(e) => setExcludeHttpErrors(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block font-medium">Exclude HTTP error pages</span>
+            <span className="block text-xs text-gray-500 mt-1">
+              Mark 4xx and 5xx responses as errors instead of comparing their
+              screenshots.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

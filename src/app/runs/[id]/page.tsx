@@ -41,6 +41,10 @@ export default async function RunPage({
   const rerunParams = new URLSearchParams()
   rerunParams.set('baseUrlA', run.baseUrlA)
   rerunParams.set('baseUrlB', run.baseUrlB)
+  rerunParams.set(
+    'excludeHttpErrors',
+    String(run.config.excludeHttpErrors ?? true),
+  )
   if (run.slugPairs) {
     for (const p of run.slugPairs) {
       rerunParams.append('slugs', p.a)

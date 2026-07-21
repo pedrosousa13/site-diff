@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     delay: userConfig?.delay ?? 500,
     threshold,
     matchPercentCutoff,
+    excludeHttpErrors: userConfig?.excludeHttpErrors ?? true,
     hideSelectors: userConfig?.hideSelectors,
     clickSelectors: userConfig?.clickSelectors,
   }
