@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { mergeSlugPairs, parseSlugLines } from '@/lib/slugs'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { mergeSlugPairs, parseSlugLines, filterSitemapSlugs } from '@/lib/slugs'
 import { parseSelectorLines, findInvalidSelector } from '@/lib/selectors'
 import { parseMatchPercentCutoff } from '@/lib/cutoffInput'
 import { DEFAULT_CONFIG, MAX_CONCURRENCY } from '@/lib/types'
 
 const STORAGE_KEY = 'site-diff-form'
+const SITEMAP_ROW_HEIGHT = 28
 
 interface FormState {
   baseUrlA: string
@@ -67,6 +69,18 @@ export default function CompareForm({ defaultConcurrency }: Props) {
   const [loading, setLoading] = useState(false)
   const [loadingSitemap, setLoadingSitemap] = useState(false)
   const [error, setError] = useState('')
+  const sitemapListRef = useRef<HTMLDivElement>(null)
+  const filteredSitemapSlugs = useMemo(
+    () => filterSitemapSlugs(sitemapSlugs, filterText),
+    [sitemapSlugs, filterText],
+  )
+  const sitemapVirtualizer = useVirtualizer({
+    count: filteredSitemapSlugs.length,
+    getScrollElement: () => sitemapListRef.current,
+    estimateSize: () => SITEMAP_ROW_HEIGHT,
+    overscan: 4,
+    useFlushSync: false,
+  })
 
   // Load from URL params or localStorage on mount
   useEffect(() => {
@@ -379,52 +393,59 @@ export default function CompareForm({ defaultConcurrency }: Props) {
         </button>
       </div>
 
-      {sitemapSlugs.length > 0 &&
-        (() => {
-          const filtered = sitemapSlugs.filter((s) =>
-            s.includes(filterText.trim()),
-          )
-          return (
-            <div className="border border-gray-200 rounded-md p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  placeholder="Filter slugs (e.g. /mba)"
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedSlugs((prev) => new Set([...prev, ...filtered]))
-                  }
-                  className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedSlugs((prev) => {
-                      const next = new Set(prev)
-                      filtered.forEach((s) => next.delete(s))
-                      return next
-                    })
-                  }
-                  className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                >
-                  Clear
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">
-                {selectedSlugs.size} of {sitemapSlugs.length} selected
-              </p>
-              <div className="max-h-64 overflow-y-auto space-y-1">
-                {filtered.map((slug) => (
+      {sitemapSlugs.length > 0 && (
+        <div className="border border-gray-200 rounded-md p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Filter slugs (e.g. /mba)"
+              className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedSlugs(
+                  (prev) => new Set([...prev, ...filteredSitemapSlugs]),
+                )
+              }
+              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedSlugs((prev) => {
+                  const next = new Set(prev)
+                  filteredSitemapSlugs.forEach((s) => next.delete(s))
+                  return next
+                })
+              }
+              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            {selectedSlugs.size} of {sitemapSlugs.length} selected
+          </p>
+          <div ref={sitemapListRef} className="max-h-64 overflow-y-auto">
+            <div
+              className="relative w-full"
+              style={{ height: sitemapVirtualizer.getTotalSize() }}
+            >
+              {sitemapVirtualizer.getVirtualItems().map((virtualRow) => {
+                const slug = filteredSitemapSlugs[virtualRow.index]
+                return (
                   <label
-                    key={slug}
-                    className="flex items-center gap-2 text-sm font-mono cursor-pointer"
+                    key={virtualRow.key}
+                    className="absolute top-0 left-0 w-full flex items-center gap-2 text-sm font-mono cursor-pointer"
+                    style={{
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -438,13 +459,14 @@ export default function CompareForm({ defaultConcurrency }: Props) {
                         })
                       }
                     />
-                    <span>{slug}</span>
+                    <span className="min-w-0 truncate">{slug}</span>
                   </label>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          )
-        })()}
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
