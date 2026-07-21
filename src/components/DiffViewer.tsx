@@ -10,6 +10,7 @@ import {
   ChevronsLeftRight,
 } from 'lucide-react'
 import type { PageResult } from '@/lib/types'
+import LiveThresholdViewer from './LiveThresholdViewer'
 
 interface Props {
   runId: string
@@ -19,6 +20,7 @@ interface Props {
   result: PageResult
   baseUrlA: string
   baseUrlB: string
+  initialThreshold: number
   checked: boolean
   onToggleChecked: (slug: string, checked: boolean) => void
   onClose: () => void
@@ -27,7 +29,7 @@ interface Props {
   position?: { index: number; total: number }
 }
 
-type ViewMode = 'side-by-side' | 'diff' | 'slider'
+type ViewMode = 'side-by-side' | 'diff' | 'slider' | 'threshold'
 
 export default function DiffViewer({
   runId,
@@ -36,6 +38,7 @@ export default function DiffViewer({
   result,
   baseUrlA,
   baseUrlB,
+  initialThreshold,
   checked,
   onToggleChecked,
   onClose,
@@ -181,7 +184,9 @@ export default function DiffViewer({
         {/* Tabs + reviewed checkbox */}
         <div className="flex items-center justify-between gap-2 p-4 border-b">
           <div className="flex gap-2">
-            {(['side-by-side', 'diff', 'slider'] as ViewMode[]).map((m) => (
+            {(
+              ['side-by-side', 'diff', 'slider', 'threshold'] as ViewMode[]
+            ).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -193,7 +198,9 @@ export default function DiffViewer({
                   ? 'Side by Side'
                   : m === 'diff'
                     ? 'Diff Overlay'
-                    : 'Slider'}
+                    : m === 'slider'
+                      ? 'Slider'
+                      : 'Live Threshold'}
               </button>
             ))}
           </div>
@@ -208,7 +215,7 @@ export default function DiffViewer({
           </label>
         </div>
 
-        {/* Content — all panels stay mounted; inactive ones are hidden to avoid image reload blink. */}
+        {/* Cached-image panels stay mounted to avoid reload blink. Live threshold mounts on demand. */}
         <div className="flex-1 overflow-auto pb-4 px-4">
           <div className={mode === 'side-by-side' ? '' : 'hidden'}>
             <div className="grid grid-cols-2 gap-4">
@@ -316,6 +323,15 @@ export default function DiffViewer({
               </div>
             </div>
           </div>
+
+          {mode === 'threshold' && (
+            <LiveThresholdViewer
+              key={`${runId}:${slug}`}
+              runId={runId}
+              slug={slug}
+              initialThreshold={initialThreshold}
+            />
+          )}
         </div>
       </div>
     </div>

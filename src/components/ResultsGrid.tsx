@@ -214,6 +214,7 @@ export default function ResultsGrid({ run: initialRun }: Props) {
           result={run.results.find((r) => r.slug === selectedSlug)!}
           baseUrlA={run.baseUrlA}
           baseUrlB={run.baseUrlB}
+          initialThreshold={run.config.threshold}
           checked={Boolean(
             run.results.find((r) => r.slug === selectedSlug)!.checked,
           )}

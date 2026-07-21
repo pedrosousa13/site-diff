@@ -14,12 +14,30 @@ export interface DiffResult {
   sizeDiff: boolean
 }
 
+export interface BufferedDiffResult extends DiffResult {
+  buffer: Buffer
+}
+
 export async function diffImages(
   imgPathA: string,
   imgPathB: string,
   diffOutputPath: string,
   threshold: number = 0.1,
 ): Promise<DiffResult> {
+  const { buffer, ...result } = await diffImagesToBuffer(
+    imgPathA,
+    imgPathB,
+    threshold,
+  )
+  await fs.writeFile(diffOutputPath, buffer)
+  return result
+}
+
+export async function diffImagesToBuffer(
+  imgPathA: string,
+  imgPathB: string,
+  threshold: number = 0.1,
+): Promise<BufferedDiffResult> {
   const [bufferA, bufferB] = await Promise.all([
     fs.readFile(imgPathA),
     fs.readFile(imgPathB),
@@ -53,12 +71,15 @@ export async function diffImages(
     },
   )
 
-  await fs.writeFile(diffOutputPath, PNG.sync.write(diff))
-
   const totalPixels = width * height
   const mismatchPercent = (mismatchPixels / totalPixels) * 100
 
-  return { mismatchPixels, mismatchPercent, sizeDiff }
+  return {
+    buffer: PNG.sync.write(diff),
+    mismatchPixels,
+    mismatchPercent,
+    sizeDiff,
+  }
 }
 
 function padImage(img: PNG, targetWidth: number, targetHeight: number): PNG {
