@@ -1,12 +1,15 @@
 import { Suspense } from 'react'
+import { availableParallelism } from 'node:os'
 import CompareForm from '@/components/CompareForm'
 import PastRuns from '@/components/PastRuns'
+import { deriveDefaultConcurrency } from '@/lib/concurrency'
 import { listRuns } from '@/lib/storage'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   const runs = await listRuns()
+  const defaultConcurrency = deriveDefaultConcurrency(availableParallelism())
 
   return (
     <main className="container mx-auto p-8 max-w-4xl">
@@ -18,7 +21,7 @@ export default async function Home() {
         <Suspense
           fallback={<div className="animate-pulse h-64 bg-gray-100 rounded" />}
         >
-          <CompareForm />
+          <CompareForm defaultConcurrency={defaultConcurrency} />
         </Suspense>
       </div>
 

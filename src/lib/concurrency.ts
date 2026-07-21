@@ -1,3 +1,11 @@
+import { MAX_CONCURRENCY } from './types'
+
+/** Default concurrency for a fresh form: half the host's CPU count, clamped
+ * to [1, MAX_CONCURRENCY]. */
+export function deriveDefaultConcurrency(cpuCount: number): number {
+  return Math.min(Math.max(1, Math.floor(cpuCount / 2)), MAX_CONCURRENCY)
+}
+
 /**
  * Run `fn` over `items` with at most `limit` calls in flight at once.
  * Results are returned in input order. `fn` should handle its own errors;
