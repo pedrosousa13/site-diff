@@ -35,16 +35,30 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const { slug, checked } = await request.json()
+  let body: Record<string, unknown>
+  try {
+    const parsed: unknown = await request.json()
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('not an object')
+    }
+    body = parsed as Record<string, unknown>
+  } catch {
+    return NextResponse.json(
+      { error: 'Expected a JSON object body' },
+      { status: 400 },
+    )
+  }
+  const { slug } = body
 
-  // Read-modify-write under the run lock with a fresh read, so toggling `checked`
-  // doesn't clobber a result an in-flight appendResult is writing.
+  // Read-modify-write under the run lock with a fresh read, so review updates
+  // don't clobber a result an in-flight appendResult is writing.
   const outcome = await withRunLock(id, async () => {
     const run = await getMetadata(id)
     if (!run) return 'run-not-found' as const
     const result = run.results.find((r) => r.slug === slug)
     if (!result) return 'slug-not-found' as const
-    result.checked = Boolean(checked)
+    if ('checked' in body) result.checked = Boolean(body.checked)
+    if ('viewed' in body) result.viewed = Boolean(body.viewed)
     await saveMetadata(run)
     return 'ok' as const
   })

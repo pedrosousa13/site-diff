@@ -16,6 +16,7 @@ export interface PageResult {
   error?: string
   version: number
   checked?: boolean
+  viewed?: boolean
 }
 
 /** A page whose path differs between the two environments. */
