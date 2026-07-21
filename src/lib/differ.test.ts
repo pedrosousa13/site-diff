@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { PNG } from 'pngjs'
-import { diffImages } from './differ'
+import { determineStatus, diffImages } from './differ'
 
 const tmp = path.join(os.tmpdir(), 'site-diff-differ-test')
 
@@ -49,5 +49,33 @@ describe('diffImages two-color overlay', () => {
     await writeSolid(b, 255, 255, 255) // B white -> B lighter -> removed
     await diffImages(a, b, out, 0.1)
     expect(await centerPixel(out)).toEqual([255, 0, 0])
+  })
+})
+
+describe('determineStatus', () => {
+  it('uses the default 0.05% cutoff, matching at the boundary', () => {
+    expect(determineStatus(0.049)).toBe('match')
+    expect(determineStatus(0.05)).toBe('match')
+    expect(determineStatus(0.051)).toBe('diff')
+  })
+
+  it('uses a custom match-percent cutoff', () => {
+    expect(determineStatus(0.1, 0.2)).toBe('match')
+    expect(determineStatus(0.2, 0.2)).toBe('match')
+    expect(determineStatus(0.3, 0.2)).toBe('diff')
+  })
+})
+
+describe('determineStatus with cutoff 0', () => {
+  it('treats a pixel-identical page as a match when cutoff is 0', () => {
+    expect(determineStatus(0, 0)).toBe('match')
+  })
+
+  it('treats any mismatch as a diff when cutoff is 0', () => {
+    expect(determineStatus(0.0001, 0)).toBe('diff')
+  })
+
+  it('treats a page exactly at the cutoff as a match', () => {
+    expect(determineStatus(0.05, 0.05)).toBe('match')
   })
 })

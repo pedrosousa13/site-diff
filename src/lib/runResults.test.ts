@@ -19,6 +19,7 @@ function makeRun(partial: Partial<ComparisonRun>): ComparisonRun {
       fullPage: true,
       delay: 0,
       threshold: 0.1,
+      matchPercentCutoff: 0.05,
     },
     slugs: ['/', '/about', '/contact'],
     results: [],

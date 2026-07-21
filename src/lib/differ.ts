@@ -83,7 +83,10 @@ function padImage(img: PNG, targetWidth: number, targetHeight: number): PNG {
   return padded
 }
 
-export function determineStatus(mismatchPercent: number): PageResult['status'] {
-  // Less than 0.05% is considered a match (anti-aliasing noise)
-  return mismatchPercent < 0.05 ? 'match' : 'diff'
+export function determineStatus(
+  mismatchPercent: number,
+  matchPercentCutoff: number = 0.05,
+): PageResult['status'] {
+  // <= so a cutoff of 0 still classifies pixel-identical pages as matches.
+  return mismatchPercent <= matchPercentCutoff ? 'match' : 'diff'
 }

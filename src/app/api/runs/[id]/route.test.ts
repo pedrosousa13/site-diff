@@ -25,6 +25,7 @@ function makeRun(result: PageResult): ComparisonRun {
       fullPage: true,
       delay: 500,
       threshold: 0.1,
+      matchPercentCutoff: 0.05,
     },
     slugs: [result.slug],
     results: [result],
