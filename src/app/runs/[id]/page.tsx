@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getMetadata } from '@/lib/storage'
 import { getAllSlugs } from '@/lib/runResults'
 import ResultsGrid from '@/components/ResultsGrid'
+import RunSettingsPanel from '@/components/RunSettingsPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,8 @@ export default async function RunPage({
           Run Again
         </Link>
       </div>
+
+      <RunSettingsPanel run={run} />
 
       <ResultsGrid run={run} />
     </main>
