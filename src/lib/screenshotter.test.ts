@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn(),
   goto: vi.fn(),
   screenshot: vi.fn(),
+  addStyleTag: vi.fn(),
   closeContext: vi.fn(),
   closeBrowser: vi.fn(),
 }))
@@ -26,6 +27,7 @@ beforeEach(() => {
         goto: mocks.goto,
         click: vi.fn(),
         evaluate: vi.fn(),
+        addStyleTag: mocks.addStyleTag,
         waitForTimeout: vi.fn(),
         screenshot: mocks.screenshot,
       }),
@@ -77,5 +79,63 @@ describe('shouldExcludeHttpResponse', () => {
       }),
     ).resolves.toEqual({ statusCode: 500, excluded: false })
     expect(mocks.screenshot).toHaveBeenCalledOnce()
+  })
+})
+
+describe('hideSelectors', () => {
+  beforeEach(() => {
+    mocks.goto.mockResolvedValue({ status: () => 200 })
+  })
+
+  // Banners like OneTrust are injected after the load event, so hiding has to
+  // be a stylesheet rule that also catches elements added later — not a
+  // one-shot pass over the elements present right after load.
+  it('hides via a stylesheet so late-injected elements are covered', async () => {
+    await takeScreenshot('https://example.com', '/tmp/unused.png', {
+      ...DEFAULT_CONFIG,
+      hideSelectors: ['#onetrust-consent-sdk'],
+    })
+
+    const css = mocks.addStyleTag.mock.calls
+      .map(([arg]) => arg.content)
+      .join('')
+    expect(css).toContain('#onetrust-consent-sdk')
+  })
+
+  // `visibility: hidden` is inherited and overridable: OneTrust's reset sets
+  // `visibility: visible` on every element inside its banner, so the text and
+  // buttons stayed on screen. `display: none` drops the whole subtree.
+  it('removes the subtree with display: none, not visibility', async () => {
+    await takeScreenshot('https://example.com', '/tmp/unused.png', {
+      ...DEFAULT_CONFIG,
+      hideSelectors: ['#onetrust-consent-sdk'],
+    })
+
+    const css = mocks.addStyleTag.mock.calls
+      .map(([arg]) => arg.content)
+      .join('')
+    expect(css).toContain('display: none !important')
+    expect(css).not.toContain('visibility')
+  })
+
+  it('emits one rule per selector so a bad selector cannot void the others', async () => {
+    await takeScreenshot('https://example.com', '/tmp/unused.png', {
+      ...DEFAULT_CONFIG,
+      hideSelectors: ['.a', '.b'],
+    })
+
+    const css = mocks.addStyleTag.mock.calls
+      .map(([arg]) => arg.content)
+      .join('')
+    expect(css).toContain('.a {')
+    expect(css).toContain('.b {')
+  })
+
+  it('injects nothing when no selectors are configured', async () => {
+    await takeScreenshot('https://example.com', '/tmp/unused.png', {
+      ...DEFAULT_CONFIG,
+    })
+
+    expect(mocks.addStyleTag).not.toHaveBeenCalled()
   })
 })

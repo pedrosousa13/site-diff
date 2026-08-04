@@ -113,12 +113,22 @@ export function shouldExcludeHttpResponse(
   )
 }
 
+/** Hides matching elements with a stylesheet rather than per-element inline
+ * styles, for two reasons:
+ *
+ * - Consent banners (OneTrust) are injected after the load event, so a
+ *   one-shot pass over the DOM present at load matches nothing. A stylesheet
+ *   also covers elements added later.
+ * - `display: none` removes the whole subtree. `visibility: hidden` only
+ *   hides the element itself and is inherited, so descendants can override
+ *   it — OneTrust's own reset sets `visibility: visible` on every div, span,
+ *   heading, button and link inside its banner, which kept the banner's text
+ *   and buttons on screen.
+ *
+ * One rule per selector, so a malformed selector only voids itself. */
 async function hideElements(page: Page, selectors: string[]): Promise<void> {
-  for (const selector of selectors) {
-    await page.evaluate((sel) => {
-      document.querySelectorAll(sel).forEach((el) => {
-        ;(el as HTMLElement).style.visibility = 'hidden'
-      })
-    }, selector)
-  }
+  const content = selectors
+    .map((sel) => `${sel} { display: none !important; }`)
+    .join('\n')
+  await page.addStyleTag({ content })
 }

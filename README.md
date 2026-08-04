@@ -69,7 +69,7 @@ data/
 | fullPage | true | Capture entire scroll height (default) |
 | delay | 500ms | Wait after page load for animations |
 | threshold | 0.1 | pixelmatch sensitivity (0-1) |
-| hideSelectors | [] | CSS selectors to hide (e.g., `.cookie-banner`) |
+| hideSelectors | [] | CSS selectors to hide with `display: none` (e.g., `.cookie-banner`) |
 
 ## Self-Hosting
 
