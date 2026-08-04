@@ -63,13 +63,18 @@ data/
 
 ### Configuration Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| viewport | 1280x720 | Browser window width (affects responsive layouts) |
-| fullPage | true | Capture entire scroll height (default) |
-| delay | 500ms | Wait after page load for animations |
-| threshold | 0.1 | pixelmatch sensitivity (0-1) |
-| hideSelectors | [] | CSS selectors to hide with `display: none` (e.g., `.cookie-banner`) |
+| Option         | Default  | Description                                                                                                                                                                                                                          |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| viewport       | 1280x720 | Browser window width (affects responsive layouts)                                                                                                                                                                                    |
+| fullPage       | true     | Capture entire scroll height (default)                                                                                                                                                                                               |
+| delay          | 500ms    | Wait after page load for animations                                                                                                                                                                                                  |
+| threshold      | 0.1      | pixelmatch sensitivity (0-1)                                                                                                                                                                                                         |
+| hideSelectors  | []       | CSS selectors to hide with `display: none` (e.g., `.cookie-banner`)                                                                                                                                                                  |
+| clickSelectors | []       | CSS selectors to click after load, to dismiss banners. Prefer `hideSelectors`: a selector that never appears costs a 1.5s wait on every page, and accepting a consent banner loads the scripts it gated, which can shift the layout. |
+
+A run page has a Settings panel holding the values it was captured with. Edit
+them and re-run to replace that run's screenshots and results. Use "Run Again"
+instead to keep the current results and start a separate run.
 
 ## Self-Hosting
 
@@ -93,7 +98,7 @@ services:
   site-diff:
     build: .
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - ./data:/app/data
 ```
