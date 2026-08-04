@@ -54,6 +54,27 @@ export function withRunLock<T>(
 // Keep the shared browser open while any run is in flight.
 let activeRuns = 0
 
+/**
+ * One log line naming the click selectors that never appeared, or null when
+ * they all matched. A miss costs the click timeout on every page and on both
+ * sides, so a typo is worth a line in the log instead of a silent slowdown.
+ * The same selector missing on both sides is one mistake, so it is named once.
+ */
+export function unmatchedClickWarning(
+  slug: string,
+  sides: PromiseSettledResult<ScreenshotResult>[],
+): string | null {
+  const selectors = new Set(
+    sides.flatMap((settled) =>
+      settled.status === 'fulfilled'
+        ? (settled.value.unmatchedClickSelectors ?? [])
+        : [],
+    ),
+  )
+  if (!selectors.size) return null
+  return `Click selectors never matched on ${slug}: ${[...selectors].join(', ')}`
+}
+
 export async function compareSlug(
   run: ComparisonRun,
   slug: string,
@@ -75,6 +96,9 @@ export async function compareSlug(
       takeScreenshot(urlA, pathA, config),
       takeScreenshot(urlB, pathB, config),
     ])
+
+    const warning = unmatchedClickWarning(slug, [settledA, settledB])
+    if (warning) console.warn(warning)
 
     const problem = (
       side: 'A' | 'B',

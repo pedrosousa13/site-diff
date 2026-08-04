@@ -1,12 +1,35 @@
-import { chromium, Browser, Page } from 'playwright'
+import { chromium, Browser, BrowserContext, Page } from 'playwright'
 import type { ComparisonConfig } from './types'
 
 export interface ScreenshotResult {
   statusCode: number | null
   excluded: boolean
+  /** Click selectors that never appeared on this page. Absent when they all
+   * matched. A miss costs CLICK_TIMEOUT_MS, so a typo is worth surfacing. */
+  unmatchedClickSelectors?: string[]
 }
 
+/** How long to wait for a click selector to appear. Consent banners are
+ * injected within ~500ms of the load event; a miss costs this much on every
+ * page, on both sides, so keep the margin modest. */
+export const CLICK_TIMEOUT_MS = 1500
+
 let browser: Browser | null = null
+
+/** Cookies and storage captured after a consent banner was dismissed, keyed by
+ * origin. A context is created per screenshot, so without this every page
+ * re-shows the banner and re-pays the click. Cleared with the browser so state
+ * never leaks between runs. */
+const consentState = new Map<string, StorageState>()
+type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
 
 async function getBrowser(): Promise<Browser> {
   if (!browser) {
@@ -18,6 +41,7 @@ async function getBrowser(): Promise<Browser> {
 }
 
 export async function closeBrowser(): Promise<void> {
+  consentState.clear()
   if (browser) {
     await browser.close()
     browser = null
@@ -30,9 +54,12 @@ export async function takeScreenshot(
   config: ComparisonConfig,
 ): Promise<ScreenshotResult> {
   const b = await getBrowser()
+  const origin = originOf(url)
+  const reusedConsent = origin ? consentState.has(origin) : false
   const context = await b.newContext({
     viewport: config.viewport,
     ignoreHTTPSErrors: true,
+    storageState: origin ? consentState.get(origin) : undefined,
   })
 
   const page = await context.newPage()
@@ -73,13 +100,24 @@ export async function takeScreenshot(
 
     // Dismiss consent banners / modals by clicking (e.g. OneTrust accept button).
     // Best-effort: the banner may not appear on every page or environment.
+    const unmatched: string[] = []
     if (config.clickSelectors?.length) {
+      let clicked = false
       for (const selector of config.clickSelectors) {
         try {
-          await page.click(selector, { timeout: 5000 })
+          await page.click(selector, { timeout: CLICK_TIMEOUT_MS })
+          clicked = true
         } catch {
-          // Selector not present — nothing to dismiss, continue.
+          // Selector not present — nothing to dismiss, continue. Carrying
+          // consent over is exactly why the banner is absent on later pages, so
+          // a miss there is expected rather than a mistake worth reporting.
+          if (!reusedConsent) unmatched.push(selector)
         }
+      }
+      // Something was dismissed, so this context now holds the consent cookie.
+      // Hand it to the next page of this origin so it skips the banner.
+      if (clicked && origin) {
+        consentState.set(origin, await context.storageState())
       }
     }
 
@@ -95,7 +133,11 @@ export async function takeScreenshot(
       path: outputPath,
       fullPage: config.fullPage,
     })
-    return { statusCode, excluded: false }
+    return {
+      statusCode,
+      excluded: false,
+      ...(unmatched.length && { unmatchedClickSelectors: unmatched }),
+    }
   } finally {
     await context.close()
   }
