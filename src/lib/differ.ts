@@ -5,8 +5,8 @@ import type { PageResult } from './types'
 
 // Diff overlay colors. pixelmatch uses diffColorAlt when the pixel is darker
 // in B than in A, and diffColor otherwise.
-const DIFF_COLOR_REMOVED: [number, number, number] = [255, 0, 0] // B lighter than A
-const DIFF_COLOR_ADDED: [number, number, number] = [0, 180, 80] // B darker than A
+export const DIFF_COLOR_REMOVED: [number, number, number] = [255, 0, 0] // B lighter than A
+export const DIFF_COLOR_ADDED: [number, number, number] = [0, 180, 80] // B darker than A
 
 export interface DiffResult {
   mismatchPixels: number
