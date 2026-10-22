@@ -82,6 +82,22 @@ A run page has a Settings panel holding the values it was captured with. Edit
 them and re-run to replace that run's screenshots and results. Use "Run Again"
 instead to keep the current results and start a separate run.
 
+## For AI agents
+
+Read a run as plain text instead of loading full-page screenshots:
+
+```bash
+curl "http://localhost:3333/api/runs/<run-id>/report?top=20"
+```
+
+The report lists the counts, every error (first line only), and the `top`
+worst diff pages (default 20, max 200). Each page line gives the mismatch
+percentage, the page heights when they differ, and up to 5 changed regions as
+y-ranges. For each region, site-diff writes one small crop to
+`data/runs/<run-id>/report/`: A on the left, B on the right, scaled to at most
+1200px wide. Open only the crops you need. They cost far fewer tokens than the
+full screenshots.
+
 ## Self-Hosting
 
 ### Docker
