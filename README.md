@@ -72,6 +72,12 @@ data/
 | hideSelectors  | []       | CSS selectors to hide with `display: none` (e.g., `.cookie-banner`)                                                                                                                                                                  |
 | clickSelectors | []       | CSS selectors to click after load, to dismiss banners. Prefer `hideSelectors`: a selector that never appears costs a 1.5s wait on every page, and accepting a consent banner loads the scripts it gated, which can shift the layout. |
 
+### Environment variables
+
+| Variable             | Description                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| SITE_DIFF_USER_AGENT | User-Agent for every screenshot. Use it for sites behind SSO that let an allowlisted User-Agent through. Unset keeps the Playwright default. |
+
 A run page has a Settings panel holding the values it was captured with. Edit
 them and re-run to replace that run's screenshots and results. Use "Run Again"
 instead to keep the current results and start a separate run.
