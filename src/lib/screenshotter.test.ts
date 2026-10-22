@@ -257,3 +257,29 @@ describe('clickSelectors', () => {
     expect(mocks.storageState).not.toHaveBeenCalled()
   })
 })
+
+describe('userAgent', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('uses SITE_DIFF_USER_AGENT for the browser context', async () => {
+    vi.stubEnv('SITE_DIFF_USER_AGENT', 'site-diff-bot/1.0')
+    mocks.goto.mockResolvedValue({ status: () => 200 })
+
+    await takeScreenshot('https://example.com/', '/tmp/a.png', DEFAULT_CONFIG)
+
+    expect(mocks.newContext.mock.calls[0][0].userAgent).toBe(
+      'site-diff-bot/1.0',
+    )
+  })
+
+  it('keeps the browser default when SITE_DIFF_USER_AGENT is unset', async () => {
+    vi.stubEnv('SITE_DIFF_USER_AGENT', '')
+    mocks.goto.mockResolvedValue({ status: () => 200 })
+
+    await takeScreenshot('https://example.com/', '/tmp/a.png', DEFAULT_CONFIG)
+
+    expect(mocks.newContext.mock.calls[0][0].userAgent).toBeUndefined()
+  })
+})

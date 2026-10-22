@@ -60,6 +60,9 @@ export async function takeScreenshot(
     viewport: config.viewport,
     ignoreHTTPSErrors: true,
     storageState: origin ? consentState.get(origin) : undefined,
+    // Lets sites behind SSO allowlist the screenshotter by User-Agent. Read
+    // from the environment so the value never lands in saved run config.
+    userAgent: process.env.SITE_DIFF_USER_AGENT || undefined,
   })
 
   const page = await context.newPage()
